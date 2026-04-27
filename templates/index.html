@@ -226,7 +226,8 @@
 
     <div class="toolbar">
         <input type="text" class="search-input" id="search" placeholder="搜尋代碼或名稱..." oninput="filterTable()">
-        <button class="btn" id="btnWatchFilter" onclick="toggleWatchFilter()" style="padding:4px 12px;border:1px solid #2563eb;background:#fff;color:#2563eb;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">觀察名單 <span id="watchCount"></span></button>
+        <button onclick="openWatchPanel()" style="padding:4px 12px;border:1px solid #7c3aed;background:#fff;color:#7c3aed;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">編輯觀察名單</button>
+        <button class="btn" id="btnWatchFilter" onclick="toggleWatchFilter()" style="padding:4px 12px;border:1px solid #2563eb;background:#fff;color:#2563eb;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">顯示觀察 <span id="watchCount"></span></button>
         <span class="filter-info" id="filter-info"></span>
     </div>
 
@@ -248,13 +249,6 @@
         let _watchSet = new Set(JSON.parse(localStorage.getItem('shendong_watchList') || '[]'));
         let _watchOnly = false;
 
-        function toggleWatch(cb) {
-            const code = cb.dataset.code;
-            if (cb.checked) _watchSet.add(code); else _watchSet.delete(code);
-            localStorage.setItem('shendong_watchList', JSON.stringify([..._watchSet]));
-            updateWatchCount();
-            if (_watchOnly && !cb.checked) filterTable();
-        }
         function toggleWatchFilter() {
             _watchOnly = !_watchOnly;
             const btn = document.getElementById('btnWatchFilter');
@@ -265,6 +259,58 @@
         function updateWatchCount() {
             const el = document.getElementById('watchCount');
             if (el) el.textContent = _watchSet.size ? `${_watchSet.size} 支` : '';
+        }
+        function saveWatch() {
+            localStorage.setItem('shendong_watchList', JSON.stringify([..._watchSet]));
+            updateWatchCount();
+        }
+        function openWatchPanel() {
+            let panel = document.getElementById('watchPanel');
+            if (panel) { panel.style.display = panel.style.display === 'none' ? 'block' : 'none'; return; }
+            panel = document.createElement('div');
+            panel.id = 'watchPanel';
+            panel.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.2);padding:24px;z-index:9999;min-width:360px;max-height:80vh;overflow-y:auto';
+            renderWatchPanel(panel);
+            document.body.appendChild(panel);
+        }
+        function renderWatchPanel(panel) {
+            if (!panel) panel = document.getElementById('watchPanel');
+            if (!panel) return;
+            const items = [..._watchSet].map(code => {
+                const stock = allStocks.find(s => s.code === code);
+                const name = stock ? stock.name : '';
+                return `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f1f5f9">
+                  <span><strong style="color:#2563eb">${code}</strong> ${name}</span>
+                  <button onclick="removeWatch('${code}')" style="border:none;background:none;color:#ef4444;cursor:pointer;font-weight:700;font-size:1rem">x</button>
+                </div>`;
+            }).join('');
+            panel.innerHTML = `
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+                <span style="font-weight:700;font-size:1rem">觀察名單</span>
+                <button onclick="document.getElementById('watchPanel').style.display='none'" style="border:none;background:none;cursor:pointer;font-size:1.2rem;color:#64748b">x</button>
+              </div>
+              <div style="display:flex;gap:8px;margin-bottom:16px">
+                <input id="watchInput" placeholder="輸入股票代碼" style="flex:1;border:1px solid #cbd5e1;border-radius:6px;padding:6px 10px;font-size:.9rem" onkeydown="if(event.key==='Enter')addWatch()">
+                <button onclick="addWatch()" style="padding:6px 14px;border:1px solid #2563eb;border-radius:6px;background:#2563eb;color:#fff;cursor:pointer;font-size:.85rem;font-weight:600">加入</button>
+              </div>
+              <div id="watchListItems">${items || '<span style="color:#94a3b8">尚未加入觀察名單</span>'}</div>
+            `;
+        }
+        function addWatch() {
+            const input = document.getElementById('watchInput');
+            const code = input.value.trim();
+            if (!code) return;
+            _watchSet.add(code);
+            saveWatch();
+            input.value = '';
+            renderWatchPanel();
+            if (_watchOnly) filterTable();
+        }
+        function removeWatch(code) {
+            _watchSet.delete(code);
+            saveWatch();
+            renderWatchPanel();
+            if (_watchOnly) filterTable();
         }
 
         // 營收格式化：千元 → 顯示百萬（除以1000）
@@ -390,9 +436,8 @@
             shHtml += `<th class="sortable" onclick="sortTable('est_nonop')">估業外 <span class="sort-arrow" id="sa_est_nonop">↕</span></th>`;
             shHtml += `<th class="sortable" onclick="sortTable('est_eps')">估EPS <span class="sort-arrow" id="sa_est_eps">↕</span></th>`;
 
-            // 觀察名單 + 營收備註
-            shHtml += `<th class="sep-left" style="width:40px;text-align:center">觀察</th>`;
-            shHtml += `<th>營收備註</th>`;
+            // 營收備註
+            shHtml += `<th class="sep-left">營收備註</th>`;
 
             sh.innerHTML = shHtml;
 
@@ -488,10 +533,8 @@
                 html += `<td class="num" style="${estStyle}">${eno != null ? eno.toLocaleString('zh-TW') : '-'}</td>`;
                 html += `<td class="num" style="${estStyle};font-weight:${eeps != null ? '700' : '400'}">${eeps != null ? eeps.toFixed(2) : '-'}</td>`;
 
-                // 觀察名單 + 營收備註
-                const isWatched = _watchSet.has(s.code);
-                html += `<td class="sep-left" style="text-align:center"><input type="checkbox" data-code="${s.code}" ${isWatched?'checked':''} onchange="toggleWatch(this)"></td>`;
-                html += `<td style="font-size:.78rem;color:#64748b;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${s.revenue_note || ''}">${s.revenue_note || ''}</td>`;
+                // 營收備註
+                html += `<td class="sep-left" style="font-size:.78rem;color:#64748b;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${s.revenue_note || ''}">${s.revenue_note || ''}</td>`;
 
                 tr.innerHTML = html;
                 fragment.appendChild(tr);
