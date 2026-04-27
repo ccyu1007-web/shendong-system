@@ -150,6 +150,7 @@ def _api_stocks_cloud():
             'div_label': s.get('div_1_label'),
             'eps_date': s.get('eps_date'),
             'eps_latest_q': s.get('eps_1q', ''),
+            'revenue_note': s.get('revenue_note') or '',
             'monthly': m_data,
             'mom_change': mom_change,
             'quarterly_revenue': qrev_all.get(code, {}),
@@ -236,12 +237,14 @@ def api_stocks():
             pconn = sqlite3.connect(stock_db_path)
             pconn.row_factory = sqlite3.Row
             for pr in pconn.execute('''SELECT code, close, change, div_c1, div_s1, div_1_label,
-                    eps_date, eps_1, eps_1q, eps_2, eps_2q, eps_3, eps_3q, eps_4, eps_4q, eps_5, eps_5q
+                    eps_date, eps_1, eps_1q, eps_2, eps_2q, eps_3, eps_3q, eps_4, eps_4q, eps_5, eps_5q,
+                    revenue_note
                     FROM stocks'''):
                 pd = {
                     'close': pr['close'], 'change': pr['change'],
                     'div_cash': pr['div_c1'], 'div_stock': pr['div_s1'], 'div_label': pr['div_1_label'],
                     'eps_date': pr['eps_date'], 'eps_latest_q': pr['eps_1q'],
+                    'revenue_note': pr['revenue_note'],
                 }
                 for i in range(1, 6):
                     pd[f'eps_{i}q'] = pr[f'eps_{i}q']
@@ -282,6 +285,7 @@ def api_stocks():
             'div_label': pdata.get('div_label'),
             'eps_date': pdata.get('eps_date'),
             'eps_latest_q': pdata.get('eps_latest_q'),
+            'revenue_note': pdata.get('revenue_note') or '',
         }
 
         # 月營收

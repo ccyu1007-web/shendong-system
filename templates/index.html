@@ -226,6 +226,7 @@
 
     <div class="toolbar">
         <input type="text" class="search-input" id="search" placeholder="搜尋代碼或名稱..." oninput="filterTable()">
+        <button class="btn" id="btnWatchFilter" onclick="toggleWatchFilter()" style="padding:4px 12px;border:1px solid #2563eb;background:#fff;color:#2563eb;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">觀察名單 <span id="watchCount"></span></button>
         <span class="filter-info" id="filter-info"></span>
     </div>
 
@@ -242,6 +243,29 @@
     <script>
         let allStocks = [];
         const _today = new Date().toISOString().slice(0, 10);
+
+        // ── 觀察名單 ──
+        let _watchSet = new Set(JSON.parse(localStorage.getItem('shendong_watchList') || '[]'));
+        let _watchOnly = false;
+
+        function toggleWatch(cb) {
+            const code = cb.dataset.code;
+            if (cb.checked) _watchSet.add(code); else _watchSet.delete(code);
+            localStorage.setItem('shendong_watchList', JSON.stringify([..._watchSet]));
+            updateWatchCount();
+            if (_watchOnly && !cb.checked) filterTable();
+        }
+        function toggleWatchFilter() {
+            _watchOnly = !_watchOnly;
+            const btn = document.getElementById('btnWatchFilter');
+            btn.style.background = _watchOnly ? '#2563eb' : '';
+            btn.style.color = _watchOnly ? '#fff' : '';
+            filterTable();
+        }
+        function updateWatchCount() {
+            const el = document.getElementById('watchCount');
+            if (el) el.textContent = _watchSet.size ? `${_watchSet.size} 支` : '';
+        }
 
         // 營收格式化：千元 → 顯示百萬（除以1000）
         function fmtRevM(val) {
@@ -281,6 +305,7 @@
                     (stats.latest_month ? ` | 最新月份 ${stats.latest_month}` : '');
 
                 renderTable(data);
+                updateWatchCount();
             } catch (e) {
                 document.getElementById('loading').textContent = '載入失敗：' + e.message;
             }
@@ -364,6 +389,10 @@
             shHtml += `<th class="sortable" onclick="sortTable('est_opex')">估費用 <span class="sort-arrow" id="sa_est_opex">↕</span></th>`;
             shHtml += `<th class="sortable" onclick="sortTable('est_nonop')">估業外 <span class="sort-arrow" id="sa_est_nonop">↕</span></th>`;
             shHtml += `<th class="sortable" onclick="sortTable('est_eps')">估EPS <span class="sort-arrow" id="sa_est_eps">↕</span></th>`;
+
+            // 觀察名單 + 營收備註
+            shHtml += `<th class="sep-left" style="width:40px;text-align:center">觀察</th>`;
+            shHtml += `<th>營收備註</th>`;
 
             sh.innerHTML = shHtml;
 
@@ -459,6 +488,11 @@
                 html += `<td class="num" style="${estStyle}">${eno != null ? eno.toLocaleString('zh-TW') : '-'}</td>`;
                 html += `<td class="num" style="${estStyle};font-weight:${eeps != null ? '700' : '400'}">${eeps != null ? eeps.toFixed(2) : '-'}</td>`;
 
+                // 觀察名單 + 營收備註
+                const isWatched = _watchSet.has(s.code);
+                html += `<td class="sep-left" style="text-align:center"><input type="checkbox" data-code="${s.code}" ${isWatched?'checked':''} onchange="toggleWatch(this)"></td>`;
+                html += `<td style="font-size:.78rem;color:#64748b;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${s.revenue_note || ''}">${s.revenue_note || ''}</td>`;
+
                 tr.innerHTML = html;
                 fragment.appendChild(tr);
             });
@@ -530,15 +564,18 @@
             rows.forEach((tr, i) => {
                 const stock = allStocks[i];
                 if (!stock) return;
-                const match = !keyword ||
+                const matchKw = !keyword ||
                     stock.code.toLowerCase().includes(keyword) ||
                     stock.name.toLowerCase().includes(keyword);
-                tr.style.display = match ? '' : 'none';
-                if (match) visible++;
+                const matchWatch = !_watchOnly || _watchSet.has(stock.code);
+                const show = matchKw && matchWatch;
+                tr.style.display = show ? '' : 'none';
+                if (show) visible++;
             });
 
             document.getElementById('filter-info').textContent =
-                keyword ? `篩選：${visible} / ${allStocks.length} 支` : `共 ${allStocks.length} 支`;
+                (_watchOnly ? '觀察名單：' : '') +
+                (keyword ? `篩選：${visible} / ${allStocks.length} 支` : `共 ${visible} 支`);
         }
 
         // 快速更新
