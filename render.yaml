@@ -5,7 +5,7 @@ services:
     repo: https://github.com/ccyu1007-web/shendong-system
     branch: master
     region: singapore
-    plan: starter
+    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 120
     envVars:
