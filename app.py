@@ -55,8 +55,36 @@ def _api_stocks_cloud():
     months = rev.get('months', [])
     monthly_map = rev.get('monthly', {})
     qrev_all = rev.get('quarterly_revenue', {})
-    qeps_all = rev.get('quarterly_eps', {})
-    q_cols = rev.get('quarterly_cols', [])
+    q_cols_rev = rev.get('quarterly_cols', [])
+
+    # 季EPS：從 stocks API 的 eps_1~eps_5 建立（跟逍遙系統總表一致）
+    # 收集所有股票的季度標識，建統一欄位
+    all_q_keys = set()
+    stock_qeps = {}  # code -> {quarter_key: eps_value}
+    for s in all_stocks:
+        code = s['code']
+        sq = {}
+        for i in range(1, 6):
+            q = s.get(f'eps_{i}q')  # 民國年格式 e.g. '114Q4'
+            v = s.get(f'eps_{i}')
+            if q and v is not None:
+                roc_yr, qn = q.split('Q')
+                west_yr = int(roc_yr) + 1911
+                if west_yr in (last_year, current_year):
+                    key = f'{west_yr}Q{qn}'
+                    all_q_keys.add((west_yr, int(qn), key))
+                    sq[key] = v
+        stock_qeps[code] = sq
+
+    sorted_q = sorted(all_q_keys, key=lambda x: (x[0], x[1]))
+    q_cols = [k[2] for k in sorted_q]
+    # 季營收用 bulk/revenue 的欄位，補齊到 q_cols 裡沒有的
+    for qc in q_cols_rev:
+        if qc not in q_cols:
+            yr, qn = qc.split('Q')
+            all_q_keys.add((int(yr), int(qn), qc))
+    sorted_q = sorted(all_q_keys, key=lambda x: (x[0], x[1]))
+    q_cols = [k[2] for k in sorted_q]
 
     result = []
     for s in all_stocks:
@@ -71,8 +99,8 @@ def _api_stocks_cloud():
             if m1 and m2 and m1 > 0:
                 mom_change = round((m2 - m1) / m1 * 100, 2)
 
-        # 季EPS（累計）
-        qe = qeps_all.get(code, {})
+        # 季EPS（從 eps_1~eps_5 轉累計）
+        qe = stock_qeps.get(code, {})
         cum_eps = {}
         cum = 0
         prev_year = None
@@ -88,7 +116,7 @@ def _api_stocks_cloud():
             else:
                 cum_eps[q] = None
 
-        # 沈董EPS
+        # 沈董EPS（逍遙系統後端已計算）
         shen_eps = s.get('shen_eps')
         close = s.get('close')
 
@@ -172,69 +200,65 @@ def api_stocks():
         if r['eps'] is not None:
             qeps_map.setdefault(r['code'], {})[key] = r['eps']
 
-    # EPS 更新日期：最新一季EPS首次寫入的日期
-    eps_date_map = {}
-    c.execute('''SELECT code, year, quarter, updated_at
-           FROM quarterly_financial WHERE eps IS NOT NULL
-           ORDER BY code, year DESC, quarter DESC''')
-    for r in c.fetchall():
-        code = r['code']
-        if code not in eps_date_map:
-            dt = r['updated_at']
-            dt_str = str(dt)[:10] if dt else None
-            eps_date_map[code] = {
-                'date': dt_str,
-                'quarter': f"{r['year']}Q{r['quarter']}"
-            }
-
     # 排序季度欄位
     sorted_q = sorted(all_q_keys, key=lambda x: (x[0], x[1]))
     q_cols = [k[2] for k in sorted_q]
     last_year_q = [k for k in q_cols if k.startswith(str(last_year))]
     current_year_q = [k for k in q_cols if k.startswith(str(current_year))]
 
-    # 從逍遙系統 DB 讀取收盤價（僅本機）
+    # 從逍遙系統 DB 讀取收盤價 + eps_date + eps_1~eps_5（僅本機）
     price_map = {}
-    if not is_cloud:
-        stock_db_path = os.path.join(os.path.dirname(DB_PATH), '..', 'stock_system', 'stocks.db')
-        if os.path.exists(stock_db_path):
-            try:
-                pconn = sqlite3.connect(stock_db_path)
-                pconn.row_factory = sqlite3.Row
-                for pr in pconn.execute('SELECT code, close, change, div_c1, div_s1, div_1_label FROM stocks'):
-                    price_map[pr['code']] = {
-                        'close': pr['close'], 'change': pr['change'],
-                        'div_cash': pr['div_c1'], 'div_stock': pr['div_s1'], 'div_label': pr['div_1_label'],
-                    }
-                pconn.close()
-            except:
-                pass
+    tock_eps = {}  # code -> {quarter_key: eps}
+    stock_db_path = os.path.join(os.path.dirname(DB_PATH), '..', 'stock_system', 'stocks.db')
+    if os.path.exists(stock_db_path):
+        try:
+            pconn = sqlite3.connect(stock_db_path)
+            pconn.row_factory = sqlite3.Row
+            for pr in pconn.execute('''SELECT code, close, change, div_c1, div_s1, div_1_label,
+                    eps_date, eps_1, eps_1q, eps_2, eps_2q, eps_3, eps_3q, eps_4, eps_4q, eps_5, eps_5q,
+                    shen_eps FROM stocks'''):
+                price_map[pr['code']] = {
+                    'close': pr['close'], 'change': pr['change'],
+                    'div_cash': pr['div_c1'], 'div_stock': pr['div_s1'], 'div_label': pr['div_1_label'],
+                    'eps_date': pr['eps_date'], 'eps_latest_q': pr['eps_1q'],
+                    'shen_eps': pr['shen_eps'],
+                }
+                # 建立季EPS映射（民國→西元）
+                sq = {}
+                for i in range(1, 6):
+                    q = pr[f'eps_{i}q']
+                    v = pr[f'eps_{i}']
+                    if q and v is not None:
+                        roc_yr, qn = q.split('Q')
+                        west_yr = int(roc_yr) + 1911
+                        if west_yr in (last_year, current_year):
+                            key = f'{west_yr}Q{qn}'
+                            sq[key] = v
+                            all_q_keys.add((west_yr, int(qn), key))
+                tock_eps[pr['code']] = sq
+            pconn.close()
+            # 重新排序（可能有新欄位加入）
+            sorted_q = sorted(all_q_keys, key=lambda x: (x[0], x[1]))
+            q_cols = [k[2] for k in sorted_q]
+            last_year_q = [k for k in q_cols if k.startswith(str(last_year))]
+            current_year_q = [k for k in q_cols if k.startswith(str(current_year))]
+        except:
+            pass
 
     # 組裝結果
     result = []
     for s in stocks:
         code = s['code']
-        if is_cloud:
-            row = {
-                'code': code, 'name': s['name'], 'market': s['market'],
-                'industry': s['industry'] or '',
-                'close': s.get('close'), 'change': s.get('change'),
-                'div_cash': s.get('div_c1'), 'div_stock': s.get('div_s1'),
-                'div_label': s.get('div_1_label'),
-                'eps_date': (eps_date_map.get(code) or {}).get('date'),
-                'eps_latest_q': (eps_date_map.get(code) or {}).get('quarter'),
-            }
-        else:
-            pdata = price_map.get(code, {})
-            row = {
-                'code': code, 'name': s['name'], 'market': s['market'],
-                'industry': s['industry'] or '',
-                'close': pdata.get('close'), 'change': pdata.get('change'),
-                'div_cash': pdata.get('div_cash'), 'div_stock': pdata.get('div_stock'),
-                'div_label': pdata.get('div_label'),
-                'eps_date': (eps_date_map.get(code) or {}).get('date'),
-                'eps_latest_q': (eps_date_map.get(code) or {}).get('quarter'),
-            }
+        pdata = price_map.get(code, {})
+        row = {
+            'code': code, 'name': s['name'], 'market': s['market'],
+            'industry': s['industry'] or '',
+            'close': pdata.get('close'), 'change': pdata.get('change'),
+            'div_cash': pdata.get('div_cash'), 'div_stock': pdata.get('div_stock'),
+            'div_label': pdata.get('div_label'),
+            'eps_date': pdata.get('eps_date'),
+            'eps_latest_q': pdata.get('eps_latest_q'),
+        }
 
         # 月營收
         m_data = monthly_map.get(code, {})
@@ -250,18 +274,17 @@ def api_stocks():
             if m1 and m2 and m1 > 0:
                 row['mom_change'] = round((m2 - m1) / m1 * 100, 2)
 
-        # 季營收（百萬→億顯示由前端處理，這裡傳原始值）
+        # 季營收
         qr = qrev_map.get(code, {})
         row['quarterly_revenue'] = {q: qr.get(q) for q in q_cols}
 
-        # 季EPS（累計）
-        qe = qeps_map.get(code, {})
+        # 季EPS（用逍遙系統的 eps_1~eps_5 轉累計）
+        qe = tock_eps.get(code, {})
         cum_eps = {}
         cum = 0
         prev_year = None
         for q in q_cols:
-            parts = q.split('Q')
-            yr = parts[0]
+            yr = q.split('Q')[0]
             if yr != prev_year:
                 cum = 0
                 prev_year = yr
@@ -273,25 +296,9 @@ def api_stocks():
                 cum_eps[q] = None
         row['quarterly_eps'] = cum_eps
 
-        # 沈董EPS：當年度已公佈季度年化推算
-        shen_eps = None
-        qe_raw = qeps_map.get(code, {})
-        cur_q = [(int(k.split('Q')[1]), v) for k, v in qe_raw.items()
-                 if k.startswith(str(current_year)) and v is not None]
-        if len(cur_q) >= 4:
-            shen_eps = round(sum(v for _, v in cur_q), 2)
-        elif len(cur_q) > 0:
-            s_sum = sum(v for _, v in cur_q)
-            shen_eps = round(s_sum / len(cur_q) * 4, 2)
-        else:
-            # fallback：去年四季加總
-            last_q = [(int(k.split('Q')[1]), v) for k, v in qe_raw.items()
-                      if k.startswith(str(last_year)) and v is not None]
-            if last_q:
-                shen_eps = round(sum(v for _, v in last_q), 2)
+        # 沈董EPS（從逍遙系統讀取）
+        shen_eps = pdata.get('shen_eps')
         row['shen_eps'] = shen_eps
-
-        # 沈董本益比
         close = row.get('close')
         row['shen_pe'] = round(close / shen_eps, 2) if shen_eps and shen_eps > 0 and close else None
 
