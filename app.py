@@ -3,6 +3,10 @@
 port 5001（避免與逍遙系統 5000 衝突）
 """
 from flask import Flask, render_template, jsonify, request
+try:
+    from flask_compress import Compress
+except ImportError:
+    Compress = None
 import sqlite3
 import os
 from datetime import date
@@ -14,6 +18,8 @@ if not is_cloud:
     from fetcher import init_db, fetch_stock_list, fetch_monthly_revenue, fetch_all_quarterly, DB_PATH
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
+if Compress:
+    Compress(app)
 
 
 def get_db():
