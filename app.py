@@ -37,21 +37,133 @@ def index():
     return render_template('index.html')
 
 
+TOCK_API = 'https://tock-system.onrender.com'
+
+def _api_stocks_cloud():
+    """雲端版：從逍遙系統 API 取資料組裝"""
+    import requests as req
+    from datetime import date as dt
+
+    current_year = dt.today().year
+    last_year = current_year - 1
+
+    # 從逍遙系統取股票清單（含 close/change/div/eps 等所有資料）
+    r = req.get(f'{TOCK_API}/api/stocks', timeout=30)
+    tock = r.json()
+    all_stocks = tock.get('data', [])
+
+    # 從逍遙系統取季報資料
+    result = []
+    qrev_map = {}
+    qeps_map = {}
+    all_q_keys = set()
+    eps_date_map = {}
+
+    # 批次取季報（用逍遙系統 quarterly API 太慢，直接從 stocks 資料推算）
+    for s in all_stocks:
+        code = s['code']
+
+        # 季度 EPS（從 eps_1~eps_5 + eps_1q~eps_5q）
+        for i in range(1, 6):
+            q = s.get(f'eps_{i}q')
+            v = s.get(f'eps_{i}')
+            if q and v is not None:
+                yr_str, qn_str = q.split('Q')
+                yr = int(yr_str) + 1911  # 民國→西元
+                if yr in (last_year, current_year):
+                    key = f'{yr}Q{qn_str}'
+                    all_q_keys.add((yr, int(qn_str), key))
+                    qeps_map.setdefault(code, {})[key] = v
+
+        # EPS 更新日期
+        if s.get('eps_date'):
+            latest_q = s.get('eps_1q', '')
+            eps_date_map[code] = {'date': s['eps_date'], 'quarter': latest_q}
+
+        # 組裝
+        row = {
+            'code': code,
+            'name': s.get('name', ''),
+            'market': s.get('market', ''),
+            'industry': s.get('industry') or '',
+            'close': s.get('close'),
+            'change': s.get('change'),
+            'div_cash': s.get('div_c1'),
+            'div_stock': s.get('div_s1'),
+            'div_label': s.get('div_1_label'),
+            'eps_date': (eps_date_map.get(code) or {}).get('date'),
+            'eps_latest_q': (eps_date_map.get(code) or {}).get('quarter'),
+        }
+
+        # 月營收（逍遙系統 stocks API 沒有月營收明細，先略過）
+        row['monthly'] = {}
+        row['mom_change'] = None
+
+        # 季營收（逍遙系統 stocks API 沒有季營收，先略過）
+        row['quarterly_revenue'] = {}
+
+        # 季EPS（累計）
+        qe = qeps_map.get(code, {})
+        sorted_q = sorted(all_q_keys, key=lambda x: (x[0], x[1]))
+        q_cols = [k[2] for k in sorted_q]
+        cum_eps = {}
+        cum = 0
+        prev_year = None
+        for q in q_cols:
+            parts = q.split('Q')
+            yr = parts[0]
+            if yr != prev_year:
+                cum = 0
+                prev_year = yr
+            v = qe.get(q)
+            if v is not None:
+                cum += v
+                cum_eps[q] = round(cum, 2)
+            else:
+                cum_eps[q] = None
+        row['quarterly_eps'] = cum_eps
+
+        # 沈董EPS
+        shen_eps = s.get('shen_eps')
+        row['shen_eps'] = shen_eps
+        close = s.get('close')
+        row['shen_pe'] = round(close / shen_eps, 2) if shen_eps and shen_eps > 0 and close else None
+
+        result.append(row)
+
+    sorted_q = sorted(all_q_keys, key=lambda x: (x[0], x[1]))
+    q_cols = [k[2] for k in sorted_q]
+    last_year_q = [k for k in q_cols if k.startswith(str(last_year))]
+    current_year_q = [k for k in q_cols if k.startswith(str(current_year))]
+
+    return jsonify({
+        'stocks': result,
+        'months': [],
+        'quarterly_cols': q_cols,
+        'last_year_q': last_year_q,
+        'current_year_q': current_year_q,
+        'current_year': current_year,
+        'last_year': last_year,
+        'total': len(result),
+    })
+
+
 @app.route('/api/stocks')
 def api_stocks():
   try:
+    # 雲端：從逍遙系統 API 取資料再組裝
+    if is_cloud:
+        return _api_stocks_cloud()
+
     conn = get_db()
     c = conn.cursor()
-    ph = '%s' if is_cloud else '?'
+    ph = '?'
 
     current_year = date.today().year
     last_year = current_year - 1
 
-    # 股票清單（雲端直接讀 close/change/div）
-    if is_cloud:
-        c.execute('SELECT code, name, market, industry, close, change, div_c1, div_s1, div_1_label FROM stocks ORDER BY code')
-    else:
-        c.execute('SELECT code, name, market, industry FROM stocks ORDER BY code')
+    # 股票清單
+    c.execute('SELECT code, name, market, industry FROM stocks ORDER BY code')
     stocks = c.fetchall()
 
     # 月營收（當年度）— 單位：千元
@@ -268,21 +380,25 @@ def debug_tables():
 @app.route('/api/stats')
 def api_stats():
     """資料統計"""
+    if is_cloud:
+        import requests as req
+        try:
+            r = req.get(f'{TOCK_API}/api/status', timeout=10)
+            d = r.json()
+            return jsonify({'stocks': d.get('total', 0), 'monthly_revenue_records': 0, 'quarterly_records': 0, 'latest_month': None, 'source': 'tock-system'})
+        except:
+            return jsonify({'stocks': 0, 'monthly_revenue_records': 0, 'quarterly_records': 0, 'latest_month': None})
     conn = get_db()
     c = conn.cursor()
-    c.execute('SELECT COUNT(*) as cnt FROM stocks')
-    stock_cnt = c.fetchone()['cnt'] if is_cloud else c.fetchone()[0]
-    c.execute('SELECT COUNT(*) as cnt FROM monthly_revenue')
-    monthly_cnt = c.fetchone()['cnt'] if is_cloud else c.fetchone()[0]
-    c.execute('SELECT COUNT(*) as cnt FROM quarterly_financial')
-    quarterly_cnt = c.fetchone()['cnt'] if is_cloud else c.fetchone()[0]
-    c.execute('SELECT year, month FROM monthly_revenue ORDER BY year DESC, month DESC LIMIT 1')
-    latest_month = c.fetchone()
+    stocks = c.execute('SELECT COUNT(*) FROM stocks').fetchone()[0]
+    monthly = c.execute('SELECT COUNT(*) FROM monthly_revenue').fetchone()[0]
+    quarterly = c.execute('SELECT COUNT(*) FROM quarterly_financial').fetchone()[0]
+    latest_month = c.execute('SELECT year, month FROM monthly_revenue ORDER BY year DESC, month DESC LIMIT 1').fetchone()
     conn.close()
     return jsonify({
-        'stocks': stock_cnt,
-        'monthly_revenue_records': monthly_cnt,
-        'quarterly_records': quarterly_cnt,
+        'stocks': stocks,
+        'monthly_revenue_records': monthly,
+        'quarterly_records': quarterly,
         'latest_month': f"{latest_month['year']}/{latest_month['month']}" if latest_month else None,
     })
 
