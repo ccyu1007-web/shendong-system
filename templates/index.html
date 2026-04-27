@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>沈董投資系統</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft JhengHei", sans-serif;
+            background: #0f1923;
+            color: #e0e0e0;
+            font-size: 14px;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #1a2a3a, #0f1923);
+            border-bottom: 2px solid #2a4a6a;
+            padding: 14px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .header h1 {
+            font-size: 22px;
+            font-weight: 700;
+            color: #e8c547;
+            letter-spacing: 2px;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .stats {
+            color: #7a8a9a;
+            font-size: 12px;
+        }
+
+        .btn {
+            padding: 6px 14px;
+            border: 1px solid #3a5a7a;
+            background: #1a2a3a;
+            color: #a0b8d0;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        .btn:hover { background: #2a3a4a; color: #e0e8f0; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* 搜尋 */
+        .toolbar {
+            padding: 8px 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: #131f2b;
+            border-bottom: 1px solid #1e2e3e;
+        }
+
+        .search-input {
+            padding: 5px 10px;
+            background: #1a2a3a;
+            border: 1px solid #2a4a6a;
+            color: #e0e0e0;
+            border-radius: 4px;
+            font-size: 13px;
+            width: 200px;
+        }
+        .search-input::placeholder { color: #5a6a7a; }
+
+        .filter-info {
+            color: #7a8a9a;
+            font-size: 12px;
+        }
+
+        /* 表格 */
+        .table-wrapper {
+            overflow: auto;
+            height: calc(100vh - 110px);
+        }
+
+        table {
+            border-collapse: collapse;
+            width: max-content;
+        }
+
+        /* 表頭 */
+        thead th {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: #1a2a3a;
+            padding: 6px 10px;
+            text-align: center;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        thead tr.group-header th {
+            background: #0f1923;
+            font-size: 13px;
+            letter-spacing: 1px;
+            padding: 5px 10px;
+            border-bottom: 1px solid #2a4a6a;
+            top: 0;
+        }
+
+        thead tr.sub-header th {
+            font-size: 12px;
+            color: #9aa8b8;
+            font-weight: 500;
+            padding: 4px 8px;
+            border-bottom: 2px solid #2a4a6a;
+            top: 28px;
+        }
+
+        .group-stock { color: #e8c547; }
+        .group-monthly { color: #4fc3f7; }
+        .group-change { color: #ff9800; }
+        .group-qrev { color: #81c784; }
+        .group-qeps { color: #ce93d8; }
+        .group-div { color: #4db6ac; }
+
+        /* 表身 */
+        tbody tr {
+            border-bottom: 1px solid #1a2430;
+            transition: background 0.1s;
+        }
+        tbody tr:hover { background: #1a2a3a; }
+
+        tbody td {
+            padding: 5px 10px;
+            text-align: right;
+            white-space: nowrap;
+        }
+
+        td.stock-code {
+            text-align: left;
+            font-weight: 700;
+            color: #e8c547;
+            font-size: 13px;
+            position: sticky;
+            left: 0;
+            background: #0f1923;
+            z-index: 5;
+        }
+        tbody tr:hover td.stock-code { background: #1a2a3a; }
+
+        td.stock-name {
+            text-align: left;
+            color: #c0c8d0;
+            position: sticky;
+            left: 55px;
+            background: #0f1923;
+            z-index: 5;
+        }
+        tbody tr:hover td.stock-name { background: #1a2a3a; }
+
+        /* sticky header 也要配合 */
+        th.sticky-code {
+            position: sticky;
+            left: 0;
+            z-index: 15;
+        }
+        th.sticky-name {
+            position: sticky;
+            left: 55px;
+            z-index: 15;
+        }
+
+        td.num {
+            font-variant-numeric: tabular-nums;
+            font-family: "SF Mono", "Menlo", "Consolas", monospace;
+            font-size: 13px;
+        }
+
+        td.positive { color: #ef5350; }
+        td.negative { color: #26a69a; }
+
+        .group-price { color: #ffd54f; }
+        td.price-val { font-weight: 700; color: #ffd54f; }
+        .rt-badge { display:inline-block; padding:1px 6px; border-radius:3px; background:#059669; color:#fff; font-size:10px; margin-left:6px; }
+
+        .sortable { cursor: pointer; user-select: none; }
+        .sortable:hover { color: #e8c547; }
+        .sort-arrow { font-size: 10px; color: #5a6a7a; }
+        .sort-arrow.asc { color: #ef5350; }
+        .sort-arrow.desc { color: #26a69a; }
+
+        .sep-left { border-left: 2px solid #2a4a6a; }
+        .year-sep { border-left: 2px dashed #3a5a7a; }
+
+        td.na { color: #3a4a5a; text-align: center; }
+
+        .loading {
+            text-align: center;
+            padding: 80px;
+            color: #5a6a7a;
+            font-size: 16px;
+        }
+
+        /* 營收單位提示 */
+        .unit-hint { font-size: 10px; color: #5a6a7a; font-weight: 400; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <h1>沈董投資系統</h1>
+        </div>
+        <div class="header-right">
+            <span class="stats" id="stats"></span>
+            <label style="font-size:12px;color:#7a8a9a;display:flex;align-items:center;gap:4px;white-space:nowrap">縮放
+                <input type="range" id="zoomSlider" min="50" max="150" value="100" step="5" style="width:70px;cursor:pointer" oninput="applyZoom(this.value)">
+                <span id="zoomVal" style="min-width:30px;color:#a0b8d0">100%</span>
+            </label>
+            <button class="btn" id="btn-quick" onclick="updateQuick()">快速更新</button>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <input type="text" class="search-input" id="search" placeholder="搜尋代碼或名稱..." oninput="filterTable()">
+        <span class="filter-info" id="filter-info"></span>
+    </div>
+
+    <div class="table-wrapper">
+        <div class="loading" id="loading">載入中...</div>
+        <table id="main-table" style="display:none;">
+            <thead>
+                <tr class="group-header" id="group-header"></tr>
+                <tr class="sub-header" id="sub-header"></tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+        </table>
+    </div>
+
+    <script>
+        let allStocks = [];
+        const _today = new Date().toISOString().slice(0, 10);
+
+        // 營收格式化：千元 → 顯示百萬（除以1000）
+        function fmtRevM(val) {
+            if (val == null) return '-';
+            return Math.round(val / 1000).toLocaleString('zh-TW');
+        }
+
+        // 季營收格式化：元 → 顯示百萬（除以1,000,000）
+        function fmtQRevM(val) {
+            if (val == null) return '-';
+            return Math.round(val / 1000000).toLocaleString('zh-TW');
+        }
+
+        function fmtEps(val) {
+            if (val == null) return '-';
+            return val.toFixed(2);
+        }
+
+        function fmtChange(val) {
+            if (val == null) return '-';
+            return (val > 0 ? '+' : '') + val.toFixed(2) + '%';
+        }
+
+        const monthNames = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+
+        async function loadData() {
+            try {
+                const [stockResp, statResp] = await Promise.all([
+                    fetch('/api/stocks'),
+                    fetch('/api/stats'),
+                ]);
+                const data = await stockResp.json();
+                const stats = await statResp.json();
+
+                document.getElementById('stats').textContent =
+                    `${stats.stocks} 支 | 月營收 ${stats.monthly_revenue_records} 筆 | 季報 ${stats.quarterly_records} 筆` +
+                    (stats.latest_month ? ` | 最新月份 ${stats.latest_month}` : '');
+
+                renderTable(data);
+            } catch (e) {
+                document.getElementById('loading').textContent = '載入失敗：' + e.message;
+            }
+        }
+
+        function renderTable(data) {
+            const { stocks, months, quarterly_cols, last_year_q, current_year_q, current_year, last_year } = data;
+            allStocks = stocks;
+            // 初始化股價欄位（用逍遙系統收盤價作預設）
+            stocks.forEach(s => { s._price = s.close || null; s._change = s.change || null; });
+
+            const gh = document.getElementById('group-header');
+            const sh = document.getElementById('sub-header');
+
+            // 保存渲染參數供排序後重繪用
+            _renderParams = { months, quarterly_cols, last_year_q, current_year_q, current_year, last_year };
+
+            // 股票 (3欄)
+            let ghHtml = `<th colspan="3" class="group-stock">股票</th>`;
+            let shHtml = `<th class="sticky-code sortable" style="text-align:left;background:#1a2a3a" onclick="sortTable('code')">代碼 <span class="sort-arrow" id="sa_code">↕</span></th>` +
+                         `<th class="sticky-name sortable" style="text-align:left;background:#1a2a3a" onclick="sortTable('name')">名稱 <span class="sort-arrow" id="sa_name">↕</span></th>` +
+                         `<th class="sortable" style="text-align:left;font-size:11px;color:#7a8a9a" onclick="sortTable('industry')">產業別 <span class="sort-arrow" id="sa_industry">↕</span></th>`;
+
+            // 月營收
+            if (months.length > 0) {
+                ghHtml += `<th colspan="${months.length}" class="group-monthly sep-left">${current_year} 月營收 <span class="unit-hint">(百萬)</span></th>`;
+                months.forEach((m, i) => {
+                    shHtml += `<th class="sortable ${i === 0 ? 'sep-left' : ''}" onclick="sortTable('monthly_${m}')">${monthNames[m-1]} <span class="sort-arrow" id="sa_monthly_${m}">↕</span></th>`;
+                });
+            }
+
+            // 月變動
+            ghHtml += `<th class="group-change sep-left">月變動</th>`;
+            shHtml += `<th class="sortable sep-left" onclick="sortTable('mom_change')">近兩月 <span class="sort-arrow" id="sa_mom_change">↕</span></th>`;
+
+            // 季營收
+            if (quarterly_cols.length > 0) {
+                ghHtml += `<th colspan="${quarterly_cols.length}" class="group-qrev sep-left">季營收 <span class="unit-hint">(百萬)</span></th>`;
+                quarterly_cols.forEach((q, i) => {
+                    const isFirst = (i === 0);
+                    const isYearSep = (i === last_year_q.length && current_year_q.length > 0);
+                    shHtml += `<th class="sortable ${isFirst ? 'sep-left' : (isYearSep ? 'year-sep' : '')}" onclick="sortTable('qrev_${q}')"><span class="sort-arrow" id="sa_qrev_${q}">↕</span> ${q}</th>`;
+                });
+            }
+
+            // 季EPS(累計)
+            if (quarterly_cols.length > 0) {
+                ghHtml += `<th colspan="${quarterly_cols.length + 1}" class="group-qeps sep-left">季EPS(累計)</th>`;
+                shHtml += `<th class="sortable sep-left" onclick="sortTable('eps_date')">更新日 <span class="sort-arrow" id="sa_eps_date">↕</span></th>`;
+                quarterly_cols.forEach((q, i) => {
+                    const isYearSep = (i === last_year_q.length && current_year_q.length > 0);
+                    shHtml += `<th class="sortable ${isYearSep ? 'year-sep' : ''}" onclick="sortTable('qeps_${q}')"><span class="sort-arrow" id="sa_qeps_${q}">↕</span> ${q}</th>`;
+                });
+            }
+
+            // 即時股價 (2欄) — 放在季EPS右側
+            ghHtml += `<th colspan="2" class="group-price sep-left">即時股價</th>`;
+            shHtml += `<th class="sortable sep-left" onclick="sortTable('_price')">股價 <span class="sort-arrow" id="sa__price">↕</span></th>`;
+            shHtml += `<th class="sortable" onclick="sortTable('_change')">漲跌 <span class="sort-arrow" id="sa__change">↕</span></th>`;
+
+            // 股利（最新一年）
+            const divLabel = stocks.length > 0 ? (stocks.find(s => s.div_label) || {}).div_label : '';
+            const divYear = divLabel ? divLabel + '年' : '';
+            ghHtml += `<th colspan="3" class="group-div sep-left">股利${divYear ? '（' + divYear + '）' : ''}</th>`;
+            shHtml += `<th class="sortable sep-left" onclick="sortTable('div_cash')">現金 <span class="sort-arrow" id="sa_div_cash">↕</span></th>`;
+            shHtml += `<th class="sortable" onclick="sortTable('div_stock')">股票 <span class="sort-arrow" id="sa_div_stock">↕</span></th>`;
+            shHtml += `<th class="sortable" onclick="sortTable('div_total')">合計 <span class="sort-arrow" id="sa_div_total">↕</span></th>`;
+
+            // 沈董本益比
+            ghHtml += `<th colspan="3" class="group-qeps sep-left">沈董</th>`;
+            shHtml += `<th class="sortable sep-left" onclick="sortTable('shen_eps')">EPS <span class="sort-arrow" id="sa_shen_eps">↕</span></th>`;
+            shHtml += `<th class="sortable" onclick="sortTable('shen_pe')">本益比 <span class="sort-arrow" id="sa_shen_pe">↕</span></th>`;
+            shHtml += `<th class="sortable" onclick="sortTable('shen_yld')">殖利率 <span class="sort-arrow" id="sa_shen_yld">↕</span></th>`;
+
+            gh.innerHTML = ghHtml;
+            sh.innerHTML = shHtml;
+
+            // 表身
+            renderRows(stocks, months, quarterly_cols, last_year_q, current_year_q);
+
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('main-table').style.display = 'table';
+            document.getElementById('filter-info').textContent = `共 ${stocks.length} 支`;
+        }
+
+        function renderRows(stocks, months, qCols, lastYearQ, currentYearQ) {
+            const tbody = document.getElementById('tbody');
+            // 用 DocumentFragment 提高渲染效能
+            const fragment = document.createDocumentFragment();
+
+            stocks.forEach(s => {
+                const tr = document.createElement('tr');
+                let html = '';
+
+                // 股票
+                html += `<td class="stock-code">${s.code}</td>`;
+                html += `<td class="stock-name">${s.name}</td>`;
+                html += `<td style="text-align:left;font-size:11px;color:#7a8a9a;white-space:nowrap">${s.industry || '-'}</td>`;
+
+                // 月營收
+                if (months.length > 0) {
+                    months.forEach((m, i) => {
+                        const val = s.monthly[m.toString()];
+                        html += `<td class="num ${i === 0 ? 'sep-left' : ''}">${val != null ? fmtRevM(val) : '-'}</td>`;
+                    });
+                }
+
+                // 月變動
+                const chgCls = s.mom_change > 0 ? 'positive' : (s.mom_change < 0 ? 'negative' : '');
+                html += `<td class="num sep-left ${chgCls}">${fmtChange(s.mom_change)}</td>`;
+
+                // 季營收
+                qCols.forEach((q, i) => {
+                    const isFirst = (i === 0);
+                    const isYearSep = (i === lastYearQ.length && currentYearQ.length > 0);
+                    const cls = isFirst ? 'sep-left' : (isYearSep ? 'year-sep' : '');
+                    const val = s.quarterly_revenue[q];
+                    html += `<td class="num ${cls}">${val != null ? fmtQRevM(val) : '-'}</td>`;
+                });
+
+                // 季EPS — 更新日（僅最新季度今日首次出現才紅色）
+                const epsDate = s.eps_date || '-';
+                const isEpsNew = epsDate === _today;
+                const edStyle = isEpsNew ? 'color:#ef5350;font-weight:700' : 'color:#7a8a9a';
+                const epsQ = s.eps_latest_q ? `<br><span style="font-size:10px;color:#5a6a7a">${s.eps_latest_q}</span>` : '';
+                html += `<td class="num sep-left" style="font-size:11px;${edStyle}">${epsDate}${epsQ}</td>`;
+
+                // 季EPS
+                qCols.forEach((q, i) => {
+                    const isYearSep = (i === lastYearQ.length && currentYearQ.length > 0);
+                    const cls = isYearSep ? 'year-sep' : '';
+                    const val = s.quarterly_eps[q];
+                    const epsCls = val != null && val < 0 ? 'negative' : '';
+                    html += `<td class="num ${cls} ${epsCls}">${val != null ? fmtEps(val) : '-'}</td>`;
+                });
+
+                // 即時股價（季EPS右側）
+                const p = s._price, chg = s._change;
+                const pStr = p != null ? p.toFixed(2) : '-';
+                const chgCls2 = chg > 0 ? 'positive' : (chg < 0 ? 'negative' : '');
+                const chgStr2 = chg != null ? (chg > 0 ? '+' : '') + chg.toFixed(2) : '-';
+                html += `<td class="num sep-left price-val" data-code="${s.code}" data-field="price">${pStr}</td>`;
+                html += `<td class="num ${chgCls2}" data-code="${s.code}" data-field="change">${chgStr2}</td>`;
+
+                // 股利
+                const dc = s.div_cash, ds = s.div_stock;
+                const dt = (dc != null || ds != null) ? ((dc || 0) + (ds || 0)) : null;
+                html += `<td class="num sep-left">${dc != null ? dc.toFixed(2) : '-'}</td>`;
+                html += `<td class="num">${ds != null ? ds.toFixed(2) : '-'}</td>`;
+                html += `<td class="num" style="font-weight:600">${dt != null ? dt.toFixed(2) : '-'}</td>`;
+
+                // 沈董EPS + 本益比 + 殖利率
+                const se = s.shen_eps, sp = s.shen_pe;
+                const seCls = se != null && se < 0 ? 'negative' : '';
+                const sYld = (dt != null && dt > 0 && s._price != null && s._price > 0) ? (dt / s._price * 100) : null;
+                html += `<td class="num sep-left ${seCls}">${se != null ? se.toFixed(2) : '-'}</td>`;
+                html += `<td class="num">${sp != null ? sp.toFixed(2) : '-'}</td>`;
+                html += `<td class="num">${sYld != null ? sYld.toFixed(2) + '%' : '-'}</td>`;
+
+                tr.innerHTML = html;
+                fragment.appendChild(tr);
+            });
+
+            tbody.innerHTML = '';
+            tbody.appendChild(fragment);
+        }
+
+        // ── 排序 ──
+        let _sortKey = null, _sortAsc = true;
+        let _renderParams = {};
+
+        function _getSortVal(s, key) {
+            if (key === 'code') return s.code;
+            if (key === 'name') return s.name;
+            if (key === 'industry') return s.industry || '';
+            if (key === 'mom_change') return s.mom_change;
+            if (key === 'eps_date') return s.eps_date || '';
+            if (key === '_price') return s._price;
+            if (key === '_change') return s._change;
+            if (key === 'div_cash') return s.div_cash;
+            if (key === 'div_stock') return s.div_stock;
+            if (key === 'div_total') { const c = s.div_cash, st = s.div_stock; return (c != null || st != null) ? (c||0)+(st||0) : null; }
+            if (key === 'shen_eps') return s.shen_eps;
+            if (key === 'shen_pe') return s.shen_pe;
+            if (key === 'shen_yld') { const c = s.div_cash, st = s.div_stock, p = s._price; const t = (c!=null||st!=null)?(c||0)+(st||0):null; return (t>0&&p>0)?t/p*100:null; }
+            if (key.startsWith('monthly_')) { const m = key.replace('monthly_', ''); return s.monthly[m]; }
+            if (key.startsWith('qrev_')) { const q = key.replace('qrev_', ''); return s.quarterly_revenue[q]; }
+            if (key.startsWith('qeps_')) { const q = key.replace('qeps_', ''); return s.quarterly_eps[q]; }
+            return null;
+        }
+
+        function sortTable(key) {
+            if (_sortKey === key) _sortAsc = !_sortAsc;
+            else { _sortKey = key; _sortAsc = (key === 'code' || key === 'name'); }
+
+            // 更新箭頭
+            document.querySelectorAll('.sort-arrow').forEach(el => { el.textContent = '↕'; el.className = 'sort-arrow'; });
+            const arrow = document.getElementById('sa_' + key);
+            if (arrow) { arrow.textContent = _sortAsc ? '▲' : '▼'; arrow.className = 'sort-arrow ' + (_sortAsc ? 'asc' : 'desc'); }
+
+            const isStr = (key === 'code' || key === 'name' || key === 'industry' || key === 'eps_date');
+            allStocks.sort((a, b) => {
+                let va = _getSortVal(a, key), vb = _getSortVal(b, key);
+                if (va == null && vb == null) return 0;
+                if (va == null) return 1;
+                if (vb == null) return -1;
+                if (isStr) return _sortAsc ? String(va).localeCompare(String(vb)) : String(vb).localeCompare(String(va));
+                return _sortAsc ? va - vb : vb - va;
+            });
+
+            const { months, quarterly_cols, last_year_q, current_year_q } = _renderParams;
+            renderRows(allStocks, months, quarterly_cols, last_year_q, current_year_q);
+            filterTable();
+        }
+
+        // 搜尋篩選
+        function filterTable() {
+            const keyword = document.getElementById('search').value.trim().toLowerCase();
+            const tbody = document.getElementById('tbody');
+            const rows = tbody.querySelectorAll('tr');
+            let visible = 0;
+
+            rows.forEach((tr, i) => {
+                const stock = allStocks[i];
+                if (!stock) return;
+                const match = !keyword ||
+                    stock.code.toLowerCase().includes(keyword) ||
+                    stock.name.toLowerCase().includes(keyword);
+                tr.style.display = match ? '' : 'none';
+                if (match) visible++;
+            });
+
+            document.getElementById('filter-info').textContent =
+                keyword ? `篩選：${visible} / ${allStocks.length} 支` : `共 ${allStocks.length} 支`;
+        }
+
+        // 快速更新
+        async function updateQuick() {
+            const btn = document.getElementById('btn-quick');
+            btn.disabled = true;
+            btn.textContent = '更新中...';
+            try {
+                await fetch('/api/update/quick', { method: 'POST' });
+                location.reload();
+            } catch (e) {
+                alert('更新失敗：' + e.message);
+                btn.disabled = false;
+                btn.textContent = '快速更新';
+            }
+        }
+
+        // ── 縮放 ──
+        function applyZoom(val) {
+            const pct = parseInt(val);
+            document.getElementById('zoomVal').textContent = pct + '%';
+            document.getElementById('main-table').style.fontSize = (pct / 100 * 14) + 'px';
+            localStorage.setItem('shendong_zoom', pct);
+        }
+        (function() {
+            const saved = localStorage.getItem('shendong_zoom');
+            if (saved) {
+                const slider = document.getElementById('zoomSlider');
+                if (slider) { slider.value = saved; applyZoom(saved); }
+            }
+        })();
+
+        // ── 即時報價 ──
+        async function fetchRealtimePrices() {
+            const now = new Date();
+            const h = now.getHours();
+            const isWeekday = now.getDay() >= 1 && now.getDay() <= 5;
+            if (!(h >= 9 && h < 16) || !isWeekday) return;
+
+            const codes = allStocks.map(s => s.code);
+            if (!codes.length) return;
+
+            for (let i = 0; i < codes.length; i += 50) {
+                const batch = codes.slice(i, i + 50);
+                try {
+                    const res = await fetch('/api/realtime?codes=' + batch.join(','));
+                    const rtData = await res.json();
+                    for (const rt of rtData) {
+                        if (rt.price == null) continue;
+                        const stock = allStocks.find(s => s.code === rt.code);
+                        if (stock) {
+                            stock._price = rt.price;
+                            stock._change = rt.yesterday ? Math.round((rt.price - rt.yesterday) * 100) / 100 : null;
+                        }
+                    }
+                } catch(e) { break; }
+            }
+
+            // 更新畫面上的股價欄位（不重繪整個表格）
+            allStocks.forEach(s => {
+                const pCell = document.querySelector(`td[data-code="${s.code}"][data-field="price"]`);
+                const cCell = document.querySelector(`td[data-code="${s.code}"][data-field="change"]`);
+                if (pCell && s._price != null) pCell.textContent = s._price.toFixed(2);
+                if (cCell && s._change != null) {
+                    cCell.textContent = (s._change > 0 ? '+' : '') + s._change.toFixed(2);
+                    cCell.className = 'num ' + (s._change > 0 ? 'positive' : s._change < 0 ? 'negative' : '');
+                }
+            });
+
+            // 標記即時狀態
+            const si = document.getElementById('stats');
+            if (si && !si.querySelector('.rt-badge')) {
+                si.innerHTML += '<span class="rt-badge">即時報價</span>';
+            }
+        }
+
+        loadData().then(() => {
+            fetchRealtimePrices();
+            // 每 60 秒刷新一次
+            setInterval(fetchRealtimePrices, 60000);
+        });
+    </script>
+</body>
+</html>
