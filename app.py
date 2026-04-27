@@ -20,6 +20,10 @@ def get_db():
     if is_cloud:
         import psycopg2, psycopg2.extras
         url = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
+        # 加 sslmode=require（跨 region 需要 SSL）
+        sep = '&' if '?' in url else '?'
+        if 'sslmode' not in url:
+            url += sep + 'sslmode=require'
         conn = psycopg2.connect(url, cursor_factory=psycopg2.extras.RealDictCursor)
         return conn
     else:
