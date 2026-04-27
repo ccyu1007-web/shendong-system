@@ -30,7 +30,7 @@
   /* 估算區 */
   .est-section { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 20px; margin-bottom: 20px; }
   .est-title { font-size: 1rem; font-weight: 700; color: #1e3a5f; margin-bottom: 12px; border-bottom: 2px solid #2563eb; padding-bottom: 4px; }
-  .est-grid { display: grid; grid-template-columns: 140px 1fr; gap: 6px 12px; align-items: center; font-size: .88rem; }
+  .est-grid { display: grid; grid-template-columns: 160px 120px; gap: 6px 8px; align-items: center; font-size: .88rem; }
   .est-grid label { color: #475569; font-weight: 600; }
   .est-grid input { padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: .85rem; text-align: right; outline: none; width: 120px; }
   .est-grid input:focus { border-color: #2563eb; }
@@ -59,9 +59,18 @@
 <div class="container">
   <div id="loading" style="text-align:center;padding:60px;color:#94a3b8">載入中...</div>
   <div id="content" style="display:none">
+    <!-- 季度財報表 -->
+    <div id="quarterlyTable"></div>
+
     <!-- 自行估算區 -->
     <div class="est-section">
-      <div class="est-title">自行估算（季）</div>
+      <div class="est-title" style="display:flex;align-items:center;justify-content:space-between">
+        自行估算（季）
+        <div>
+          <button class="btn-save" onclick="saveEst()">儲存估算</button>
+          <button class="btn-clear" onclick="clearEst()">清除</button>
+        </div>
+      </div>
       <div class="est-grid">
         <label>營收月1（千元）</label><input id="estRev1" type="text" placeholder="千元" oninput="calcEst()">
         <label>營收月2（千元）</label><input id="estRev2" type="text" placeholder="千元" oninput="calcEst()">
@@ -77,20 +86,14 @@
         <label>稅後淨利</label><div class="computed" id="estNI">-</div>
         <label>歸屬母公司權重 %</label><input id="estPW" type="text" placeholder="%" oninput="calcEst()">
         <label>歸屬母公司淨利</label><div class="computed" id="estNIP">-</div>
+        <label>加權平均股數（百萬）</label><div class="computed" id="estShares">-</div>
       </div>
-      <div class="est-result">
-        預估 EPS：<b id="estEPS">-</b>
-        本業 EPS：<b id="estEPScore">-</b>
-        業外 EPS：<b id="estEPSnonop">-</b>
-      </div>
-      <div style="margin-top:8px">
-        <button class="btn-save" onclick="saveEst()">儲存估算</button>
-        <button class="btn-clear" onclick="clearEst()">清除</button>
+      <div class="est-grid" style="margin-top:8px;border-top:1px solid #e2e8f0;padding-top:8px">
+        <label>預估 EPS</label><div class="computed" id="estEPS" style="font-size:1rem">-</div>
+        <label>本業 EPS</label><div class="computed" id="estEPScore">-</div>
+        <label>業外 EPS</label><div class="computed" id="estEPSnonop">-</div>
       </div>
     </div>
-
-    <!-- 季度財報表 -->
-    <div id="quarterlyTable"></div>
   </div>
 </div>
 
@@ -132,6 +135,7 @@ function calcEst() {
   const nip = (ni != null && pw != null) ? ni * pw / 100 : null;
   document.getElementById('estNIP').textContent = nip != null ? Math.round(nip).toLocaleString('zh-TW') : '-';
 
+  document.getElementById('estShares').textContent = _shares ? _shares.toFixed(2) : '-';
   const eps = (nip != null && _shares && _shares > 0) ? nip / _shares : null;
   document.getElementById('estEPS').textContent = eps != null ? eps.toFixed(2) : '-';
 
@@ -228,6 +232,11 @@ function renderQuarterly(quarters, info) {
     return `<td class="${cls}">${v.toFixed(2)}</td>`;
   };
 
+  const fmtShares = v => {
+    if (v == null) return '<td class="v-empty">-</td>';
+    return `<td>${Math.round(v / 1000).toLocaleString('zh-TW')}</td>`;
+  };
+
   const sections = [
     { title: '損益表（百萬元）', rows: [
       ['營業收入淨額', d => d.revenue, fmtM],
@@ -242,9 +251,16 @@ function renderQuarterly(quarters, info) {
       ['稅率', d => d.tax_rate, fmtP],
       ['繼續營業單位損益', d => d.net_income_parent, fmtM],
       ['歸屬母公司權重', d => d.parent_weight, fmtP],
+    ]},
+    { title: '每股數據', rows: [
+      ['加權平均股數（千股）', d => d.weighted_shares, fmtShares],
       ['EPS', d => d.eps, fmt2],
       ['每股盈餘-本業', d => d.eps_core, fmt2],
       ['每股盈餘-業外', d => d.eps_nonop, fmt2],
+    ]},
+    { title: '其他（百萬元）', rows: [
+      ['合約負債', d => d.contract_liability, fmtM],
+      ['存貨', d => d.inventory, fmtM],
     ]},
   ];
 
@@ -287,9 +303,12 @@ function renderQuarterly(quarters, info) {
     'tax_rate': etax,
     'net_income_parent': enip ? enip * 1000000 : null,
     'parent_weight': epw,
+    'weighted_shares': _shares ? _shares * 1000000 : null,
     'eps': eeps,
     'eps_core': eepsCore,
     'eps_nonop': (eeps != null && eepsCore != null) ? eeps - eepsCore : null,
+    'contract_liability': null,
+    'inventory': null,
   };
 
   sections.forEach(sec => {
@@ -297,8 +316,9 @@ function renderQuarterly(quarters, info) {
     sec.rows.forEach(([label, getter, fmt]) => {
       html += `<tr><td class="row-label">${label}</td>`;
       // 估算欄
-      const ev = estMap[label === '營業收入淨額' ? 'revenue' : label === '營業成本' ? 'cost' : label === '營業毛利' ? 'gross_profit' : label === '毛利率' ? 'gross_margin' : label === '營業費用' ? 'operating_expense' : label === '營業利益' ? 'operating_income' : label === '業外收支' ? 'non_operating' : label === '稅前淨利' ? 'pretax_income' : label === '稅' ? 'tax' : label === '稅率' ? 'tax_rate' : label === '繼續營業單位損益' ? 'net_income_parent' : label === '歸屬母公司權重' ? 'parent_weight' : label === 'EPS' ? 'eps' : label === '每股盈餘-本業' ? 'eps_core' : label === '每股盈餘-業外' ? 'eps_nonop' : null];
-      html += ev != null ? `<td style="background:#eff6ff;font-weight:600">${fmt === fmtP ? ev.toFixed(1)+'%' : fmt === fmt2 ? ev.toFixed(2) : Math.round(ev/1000000).toLocaleString('zh-TW')}</td>` : '<td style="background:#eff6ff;color:#d1d5db">-</td>';
+      const labelMap = {'營業收入淨額':'revenue','營業成本':'cost','營業毛利':'gross_profit','毛利率':'gross_margin','營業費用':'operating_expense','營業利益':'operating_income','業外收支':'non_operating','稅前淨利':'pretax_income','稅':'tax','稅率':'tax_rate','繼續營業單位損益':'net_income_parent','歸屬母公司權重':'parent_weight','加權平均股數（千股）':'weighted_shares','EPS':'eps','每股盈餘-本業':'eps_core','每股盈餘-業外':'eps_nonop','合約負債':'contract_liability','存貨':'inventory'};
+      const ev = estMap[labelMap[label]];
+      html += ev != null ? `<td style="background:#eff6ff;font-weight:600">${fmt === fmtP ? ev.toFixed(1)+'%' : fmt === fmt2 ? ev.toFixed(2) : fmt === fmtShares ? Math.round(ev/1000).toLocaleString('zh-TW') : Math.round(ev/1000000).toLocaleString('zh-TW')}</td>` : '<td style="background:#eff6ff;color:#d1d5db">-</td>';
       quarters.forEach(q => html += fmt(getter(q)));
       html += '</tr>';
     });

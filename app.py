@@ -424,6 +424,9 @@ def api_company_quarterly(code):
                     d['parent_weight'] = round(parent_ni / ci * 100, 2) if ci and ci != 0 and parent_ni else None
                 else:
                     d['parent_weight'] = None
+                # 加權平均股數（千股）
+                d['weighted_shares'] = round(shares_raw / 1000, 0) if shares_raw else None
+
                 # 本業/業外 EPS
                 eff_tax = tax / pti if pti and pti != 0 and tax is not None else None
                 if oi is not None and shares_raw and eff_tax is not None:
