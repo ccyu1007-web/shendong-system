@@ -174,16 +174,22 @@
         tbody tr:nth-child(even) td.stock-name { background: #f8fafc; }
         tbody tr:hover td.stock-name { background: #f1f5f9; }
 
-        /* sticky header 也要配合 */
+        /* sticky header 也要配合凍結欄 */
         th.sticky-code {
             position: sticky;
             left: 0;
-            z-index: 15;
+            z-index: 20;
         }
         th.sticky-name {
             position: sticky;
             left: 55px;
-            z-index: 15;
+            z-index: 20;
+        }
+        /* group-header 第一列的凍結欄 */
+        th.sticky-group {
+            position: sticky;
+            left: 0;
+            z-index: 20;
         }
 
         td.num {
@@ -313,9 +319,9 @@
             _renderParams = { months, quarterly_cols, last_year_q, current_year_q, current_year, last_year };
 
             // 股票 (3欄)
-            let ghHtml = `<th colspan="3" class="group-stock">股票</th>`;
-            let shHtml = `<th class="sticky-code sortable" style="text-align:left;background:#1a2a3a" onclick="sortTable('code')">代碼 <span class="sort-arrow" id="sa_code">↕</span></th>` +
-                         `<th class="sticky-name sortable" style="text-align:left;background:#1a2a3a" onclick="sortTable('name')">名稱 <span class="sort-arrow" id="sa_name">↕</span></th>` +
+            let ghHtml = `<th colspan="3" class="group-stock sticky-group" style="background:#1e3a5f">股票</th>`;
+            let shHtml = `<th class="sticky-code sortable" style="text-align:left;background:#2563eb" onclick="sortTable('code')">代碼 <span class="sort-arrow" id="sa_code">↕</span></th>` +
+                         `<th class="sticky-name sortable" style="text-align:left;background:#2563eb" onclick="sortTable('name')">名稱 <span class="sort-arrow" id="sa_name">↕</span></th>` +
                          `<th class="sortable" style="text-align:left;font-size:inherit;color:#64748b" onclick="sortTable('industry')">產業別 <span class="sort-arrow" id="sa_industry">↕</span></th>`;
 
             // 月營收
