@@ -361,6 +361,106 @@ def api_stocks():
     return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
 
 
+@app.route('/company')
+def company_page():
+    return render_template('company.html')
+
+
+@app.route('/api/company/<code>/quarterly')
+def api_company_quarterly(code):
+    """個股季報資料（最近8季）"""
+    try:
+        if is_cloud:
+            import requests as req
+            r = req.get(f'{TOCK_API}/api/stocks/{code}/quarterly', timeout=30)
+            return jsonify(r.json())
+        else:
+            # 從逍遙系統 DB 讀取
+            stock_db_path = os.path.join(os.path.dirname(DB_PATH), '..', 'stock_system', 'stocks.db')
+            conn = sqlite3.connect(stock_db_path)
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """SELECT * FROM quarterly_financial WHERE code = ?
+                   ORDER BY CAST(SUBSTR(quarter, 1, INSTR(quarter, 'Q') - 1) AS INTEGER) DESC,
+                            CAST(SUBSTR(quarter, INSTR(quarter, 'Q') + 1) AS INTEGER) DESC
+                   LIMIT 8""", (code,)
+            ).fetchall()
+            # 股票名稱
+            name_row = conn.execute("SELECT name FROM stocks WHERE code = ?", (code,)).fetchone()
+            name = name_row['name'] if name_row else code
+            conn.close()
+
+            data = []
+            for r in rows:
+                d = dict(r)
+                rev = d.get('revenue')
+                pti = d.get('pretax_income')
+                nip = d.get('net_income_parent')
+                oi = d.get('operating_income')
+                tax = d.get('tax')
+                eps_val = d.get('eps')
+
+                # 反算稅額
+                if pti is not None and nip is not None:
+                    calc_tax = round(pti - nip, 2)
+                    if tax is None or (tax == 0 and abs(calc_tax) > 100):
+                        tax = calc_tax
+                        d['tax'] = tax
+
+                # 毛利率
+                d['gross_margin'] = round(d['gross_profit'] / rev * 100, 2) if rev and d.get('gross_profit') else None
+                # 稅率
+                if pti and pti > 0 and tax is not None:
+                    d['tax_rate'] = round(min(max(tax / pti * 100, 0), 100), 2)
+                else:
+                    d['tax_rate'] = None
+                # 歸屬母公司權重
+                shares_raw = None
+                if eps_val and eps_val != 0 and nip is not None:
+                    shares_raw = nip / eps_val
+                if nip is not None and shares_raw:
+                    parent_ni = round(eps_val * shares_raw, 2) if eps_val else None
+                    ci = nip  # 簡化
+                    d['parent_weight'] = round(parent_ni / ci * 100, 2) if ci and ci != 0 and parent_ni else None
+                else:
+                    d['parent_weight'] = None
+                # 本業/業外 EPS
+                eff_tax = tax / pti if pti and pti != 0 and tax is not None else None
+                if oi is not None and shares_raw and eff_tax is not None:
+                    d['eps_core'] = round(oi * (1 - eff_tax) / shares_raw, 2)
+                    d['eps_nonop'] = round(eps_val - d['eps_core'], 2) if eps_val else None
+                else:
+                    d['eps_core'] = None
+                    d['eps_nonop'] = None
+
+                data.append(d)
+
+            return jsonify({"code": code, "name": name, "data": data})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/company/<code>/info')
+def api_company_info(code):
+    """個股基本資訊（股價/股利/EPS）"""
+    try:
+        if is_cloud:
+            import requests as req
+            r = req.get(f'{TOCK_API}/api/stocks?exact={code}', timeout=30)
+            d = r.json()
+            stock = d.get('data', [{}])[0]
+            return jsonify(stock)
+        else:
+            stock_db_path = os.path.join(os.path.dirname(DB_PATH), '..', 'stock_system', 'stocks.db')
+            conn = sqlite3.connect(stock_db_path)
+            conn.row_factory = sqlite3.Row
+            row = conn.execute("SELECT * FROM stocks WHERE code = ?", (code,)).fetchone()
+            conn.close()
+            return jsonify(dict(row) if row else {})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/api/update/quick', methods=['POST'])
 def api_update_quick():
     """快速更新（清單+月營收）"""

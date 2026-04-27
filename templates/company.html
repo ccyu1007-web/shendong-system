@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>個股資料</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Microsoft JhengHei', 'Segoe UI', sans-serif; background: #f0f4f8; color: #1a202c; }
+  header {
+    background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+    color: #fff; padding: 14px 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    box-shadow: 0 2px 12px rgba(0,0,0,.25);
+  }
+  header h1 { font-size: 1.3rem; font-weight: 700; }
+  .back-link { color: rgba(255,255,255,.8); text-decoration: none; font-size: .88rem; }
+  .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+
+  /* 表格 */
+  .fs-table { width: 100%; border-collapse: collapse; font-size: .88rem; margin-bottom: 24px; }
+  .fs-table th, .fs-table td { padding: 6px 12px; border: 1px solid #e2e8f0; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .fs-table thead th { background: #1e3a5f; color: #fff; font-weight: 600; text-align: center; position: sticky; top: 0; }
+  .fs-table .row-label { text-align: left; font-weight: 600; color: #334155; background: #f8fafc; min-width: 140px; }
+  .fs-table .section-row td { background: #f1f5f9; font-weight: 700; color: #475569; border-top: 2px solid #cbd5e1; }
+  .v-pos { color: #dc2626; }
+  .v-neg { color: #16a34a; }
+  .v-empty { color: #d1d5db; }
+
+  /* 估算區 */
+  .est-section { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px 20px; margin-bottom: 20px; }
+  .est-title { font-size: 1rem; font-weight: 700; color: #1e3a5f; margin-bottom: 12px; border-bottom: 2px solid #2563eb; padding-bottom: 4px; }
+  .est-grid { display: grid; grid-template-columns: 140px 1fr; gap: 6px 12px; align-items: center; font-size: .88rem; }
+  .est-grid label { color: #475569; font-weight: 600; }
+  .est-grid input { padding: 4px 8px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: .85rem; text-align: right; outline: none; width: 120px; }
+  .est-grid input:focus { border-color: #2563eb; }
+  .est-grid .computed { color: #2563eb; font-weight: 700; min-width: 80px; text-align: right; }
+  .est-result { margin-top: 12px; padding: 10px 16px; background: #eff6ff; border-radius: 6px; font-size: .9rem; }
+  .est-result b { color: #1e3a5f; }
+  .btn-save { padding: 6px 16px; border: 1px solid #2563eb; background: #2563eb; color: #fff; border-radius: 6px; cursor: pointer; font-size: .85rem; font-weight: 600; margin-top: 8px; }
+  .btn-save:hover { background: #1d4ed8; }
+  .btn-clear { padding: 6px 16px; border: 1px solid #cbd5e1; background: #fff; color: #64748b; border-radius: 6px; cursor: pointer; font-size: .85rem; margin-top: 8px; margin-left: 8px; }
+
+  /* 跳轉 */
+  .jump-input { padding: 5px 10px; border: 1px solid rgba(255,255,255,.4); background: rgba(255,255,255,.15); color: #fff; border-radius: 6px; font-size: .85rem; width: 130px; outline: none; }
+  .jump-input::placeholder { color: rgba(255,255,255,.6); }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="pageTitle">個股資料</h1>
+  <div style="display:flex;align-items:center;gap:12px">
+    <input type="text" class="jump-input" id="jumpInput" placeholder="輸入代碼跳轉"
+      onkeydown="if(event.key==='Enter'){const v=this.value.trim();if(v)location.href='/company?code='+v;}">
+    <a href="/" class="back-link">< 回總表</a>
+  </div>
+</header>
+
+<div class="container">
+  <div id="loading" style="text-align:center;padding:60px;color:#94a3b8">載入中...</div>
+  <div id="content" style="display:none">
+    <!-- 自行估算區 -->
+    <div class="est-section">
+      <div class="est-title">自行估算（季）</div>
+      <div class="est-grid">
+        <label>營收月1（千元）</label><input id="estRev1" type="text" placeholder="千元" oninput="calcEst()">
+        <label>營收月2（千元）</label><input id="estRev2" type="text" placeholder="千元" oninput="calcEst()">
+        <label>營收月3（千元）</label><input id="estRev3" type="text" placeholder="千元" oninput="calcEst()">
+        <label>季營收（百萬）</label><div class="computed" id="estRevQ">-</div>
+        <label>毛利率 %</label><input id="estGM" type="text" placeholder="%" oninput="calcEst()">
+        <label>營業毛利</label><div class="computed" id="estGP">-</div>
+        <label>營業費用（百萬）</label><input id="estOpex" type="text" placeholder="百萬" oninput="calcEst()">
+        <label>營業利益</label><div class="computed" id="estOI">-</div>
+        <label>業外收支（百萬）</label><input id="estNonop" type="text" placeholder="百萬" oninput="calcEst()">
+        <label>稅前淨利</label><div class="computed" id="estPTI">-</div>
+        <label>稅率 %</label><input id="estTax" type="text" placeholder="%" oninput="calcEst()">
+        <label>稅後淨利</label><div class="computed" id="estNI">-</div>
+        <label>歸屬母公司權重 %</label><input id="estPW" type="text" placeholder="%" oninput="calcEst()">
+        <label>歸屬母公司淨利</label><div class="computed" id="estNIP">-</div>
+      </div>
+      <div class="est-result">
+        預估 EPS：<b id="estEPS">-</b>
+        本業 EPS：<b id="estEPScore">-</b>
+        業外 EPS：<b id="estEPSnonop">-</b>
+      </div>
+      <div style="margin-top:8px">
+        <button class="btn-save" onclick="saveEst()">儲存估算</button>
+        <button class="btn-clear" onclick="clearEst()">清除</button>
+      </div>
+    </div>
+
+    <!-- 季度財報表 -->
+    <div id="quarterlyTable"></div>
+  </div>
+</div>
+
+<script>
+const CODE = new URLSearchParams(location.search).get('code');
+if (!CODE) document.getElementById('loading').textContent = '缺少股票代碼';
+
+let _shares = null; // 百萬股
+
+function parseNum(id) {
+  const v = parseFloat(document.getElementById(id).value.replace(/,/g, ''));
+  return isNaN(v) ? null : v;
+}
+
+function calcEst() {
+  const r1 = parseNum('estRev1'), r2 = parseNum('estRev2'), r3 = parseNum('estRev3');
+  const parts = [r1, r2, r3].filter(v => v != null);
+  const cumK = parts.length > 0 ? parts.reduce((a,b) => a+b, 0) : null;
+  const cumM = cumK != null ? cumK / 1000 : null;
+  document.getElementById('estRevQ').textContent = cumM != null ? Math.round(cumM).toLocaleString('zh-TW') : '-';
+
+  const gm = parseNum('estGM');
+  const gp = (cumM != null && gm != null) ? cumM * gm / 100 : null;
+  document.getElementById('estGP').textContent = gp != null ? Math.round(gp).toLocaleString('zh-TW') : '-';
+
+  const opex = parseNum('estOpex');
+  const oi = (gp != null && opex != null) ? gp - opex : null;
+  document.getElementById('estOI').textContent = oi != null ? Math.round(oi).toLocaleString('zh-TW') : '-';
+
+  const nonop = parseNum('estNonop');
+  const pti = (oi != null && nonop != null) ? oi + nonop : null;
+  document.getElementById('estPTI').textContent = pti != null ? Math.round(pti).toLocaleString('zh-TW') : '-';
+
+  const taxRate = parseNum('estTax');
+  const ni = (pti != null && taxRate != null) ? pti * (1 - taxRate / 100) : null;
+  document.getElementById('estNI').textContent = ni != null ? Math.round(ni).toLocaleString('zh-TW') : '-';
+
+  const pw = parseNum('estPW');
+  const nip = (ni != null && pw != null) ? ni * pw / 100 : null;
+  document.getElementById('estNIP').textContent = nip != null ? Math.round(nip).toLocaleString('zh-TW') : '-';
+
+  const eps = (nip != null && _shares && _shares > 0) ? nip / _shares : null;
+  document.getElementById('estEPS').textContent = eps != null ? eps.toFixed(2) : '-';
+
+  const epsCore = (oi != null && taxRate != null && pw != null && _shares && _shares > 0)
+    ? oi * (1 - taxRate / 100) * pw / 100 / _shares : null;
+  document.getElementById('estEPScore').textContent = epsCore != null ? epsCore.toFixed(2) : '-';
+  document.getElementById('estEPSnonop').textContent = (eps != null && epsCore != null) ? (eps - epsCore).toFixed(2) : '-';
+}
+
+function saveEst() {
+  const data = {};
+  ['estRev1','estRev2','estRev3','estGM','estOpex','estNonop','estTax','estPW'].forEach(id => {
+    data[id] = document.getElementById(id).value;
+  });
+  localStorage.setItem('shendong_est_' + CODE, JSON.stringify(data));
+  alert('已儲存');
+}
+
+function clearEst() {
+  ['estRev1','estRev2','estRev3','estGM','estOpex','estNonop','estTax','estPW'].forEach(id => {
+    document.getElementById(id).value = '';
+  });
+  localStorage.removeItem('shendong_est_' + CODE);
+  calcEst();
+}
+
+function loadEst() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('shendong_est_' + CODE) || '{}');
+    Object.entries(saved).forEach(([id, val]) => {
+      const el = document.getElementById(id);
+      if (el) el.value = val;
+    });
+    calcEst();
+  } catch(e) {}
+}
+
+async function loadData() {
+  if (!CODE) return;
+  try {
+    const [qRes, infoRes] = await Promise.all([
+      fetch(`/api/company/${CODE}/quarterly`),
+      fetch(`/api/company/${CODE}/info`)
+    ]);
+    const qData = await qRes.json();
+    const info = await infoRes.json();
+
+    if (qData.error) throw new Error(qData.error);
+
+    const name = qData.name || info.name || CODE;
+    document.title = `${CODE} ${name}`;
+    document.getElementById('pageTitle').textContent = `${CODE} ${name}`;
+
+    const quarters = qData.data || [];
+
+    // 推算股數（百萬股）：EPS 反算
+    if (quarters.length > 0) {
+      const q = quarters.find(d => d.eps && d.eps !== 0 && d.net_income_parent);
+      if (q) _shares = q.net_income_parent / q.eps / 1000000;
+    }
+
+    // 渲染季報表
+    renderQuarterly(quarters, info);
+
+    // 載入儲存的估算
+    loadEst();
+
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('content').style.display = 'block';
+  } catch(e) {
+    document.getElementById('loading').textContent = '載入失敗：' + e.message;
+  }
+}
+
+function renderQuarterly(quarters, info) {
+  if (!quarters.length) {
+    document.getElementById('quarterlyTable').innerHTML = '<div style="color:#94a3b8;padding:20px">無季報資料</div>';
+    return;
+  }
+
+  const fmtM = v => {
+    if (v == null) return '<td class="v-empty">-</td>';
+    const m = v / 1000000;
+    const cls = m >= 0 ? '' : 'v-neg';
+    return `<td class="${cls}">${Math.round(m).toLocaleString('zh-TW')}</td>`;
+  };
+  const fmtP = v => {
+    if (v == null) return '<td class="v-empty">-</td>';
+    return `<td>${v.toFixed(1)}%</td>`;
+  };
+  const fmt2 = v => {
+    if (v == null) return '<td class="v-empty">-</td>';
+    const cls = v < 0 ? 'v-neg' : '';
+    return `<td class="${cls}">${v.toFixed(2)}</td>`;
+  };
+
+  const sections = [
+    { title: '損益表（百萬元）', rows: [
+      ['營業收入淨額', d => d.revenue, fmtM],
+      ['營業成本', d => d.cost, fmtM],
+      ['營業毛利', d => d.gross_profit, fmtM],
+      ['毛利率', d => d.gross_margin, fmtP],
+      ['營業費用', d => d.operating_expense, fmtM],
+      ['營業利益', d => d.operating_income, fmtM],
+      ['業外收支', d => d.non_operating, fmtM],
+      ['稅前淨利', d => d.pretax_income, fmtM],
+      ['稅', d => d.tax, fmtM],
+      ['稅率', d => d.tax_rate, fmtP],
+      ['繼續營業單位損益', d => d.net_income_parent, fmtM],
+      ['歸屬母公司權重', d => d.parent_weight, fmtP],
+      ['EPS', d => d.eps, fmt2],
+      ['每股盈餘-本業', d => d.eps_core, fmt2],
+      ['每股盈餘-業外', d => d.eps_nonop, fmt2],
+    ]},
+  ];
+
+  let html = '<table class="fs-table"><thead><tr><th style="min-width:140px">項目</th>';
+  // 自行估算欄
+  html += '<th style="background:#2563eb">自行估算</th>';
+  quarters.forEach(q => html += `<th>${q.quarter}</th>`);
+  html += '</tr></thead><tbody>';
+
+  // 載入估算值用於顯示
+  let estData = {};
+  try { estData = JSON.parse(localStorage.getItem('shendong_est_' + CODE) || '{}'); } catch(e) {}
+  const pv = s => { if (!s) return null; const v = parseFloat(String(s).replace(/,/g, '')); return isNaN(v) ? null : v; };
+  const r1 = pv(estData.estRev1), r2 = pv(estData.estRev2), r3 = pv(estData.estRev3);
+  const cumK = [r1,r2,r3].filter(v=>v!=null).reduce((a,b)=>a+b,0) || null;
+  const cumM = cumK ? cumK / 1000 : null;
+  const egm = pv(estData.estGM);
+  const egp = (cumM && egm) ? cumM * egm / 100 : null;
+  const eopex = pv(estData.estOpex);
+  const eoi = (egp != null && eopex != null) ? egp - eopex : null;
+  const enonop = pv(estData.estNonop);
+  const epti = (eoi != null && enonop != null) ? eoi + enonop : null;
+  const etax = pv(estData.estTax);
+  const eni = (epti != null && etax != null) ? epti * (1 - etax / 100) : null;
+  const epw = pv(estData.estPW);
+  const enip = (eni != null && epw != null) ? eni * epw / 100 : null;
+  const eeps = (enip != null && _shares) ? enip / _shares : null;
+  const eepsCore = (eoi != null && etax != null && epw != null && _shares) ? eoi * (1 - etax / 100) * epw / 100 / _shares : null;
+
+  const estMap = {
+    'revenue': cumM ? cumM * 1000000 : null,
+    'cost': (cumM && egp) ? (cumM - egp) * 1000000 : null,
+    'gross_profit': egp ? egp * 1000000 : null,
+    'gross_margin': egm,
+    'operating_expense': eopex ? eopex * 1000000 : null,
+    'operating_income': eoi ? eoi * 1000000 : null,
+    'non_operating': enonop ? enonop * 1000000 : null,
+    'pretax_income': epti ? epti * 1000000 : null,
+    'tax': (epti != null && etax != null) ? epti * etax / 100 * 1000000 : null,
+    'tax_rate': etax,
+    'net_income_parent': enip ? enip * 1000000 : null,
+    'parent_weight': epw,
+    'eps': eeps,
+    'eps_core': eepsCore,
+    'eps_nonop': (eeps != null && eepsCore != null) ? eeps - eepsCore : null,
+  };
+
+  sections.forEach(sec => {
+    html += `<tr class="section-row"><td colspan="${quarters.length + 2}">${sec.title}</td></tr>`;
+    sec.rows.forEach(([label, getter, fmt]) => {
+      html += `<tr><td class="row-label">${label}</td>`;
+      // 估算欄
+      const ev = estMap[label === '營業收入淨額' ? 'revenue' : label === '營業成本' ? 'cost' : label === '營業毛利' ? 'gross_profit' : label === '毛利率' ? 'gross_margin' : label === '營業費用' ? 'operating_expense' : label === '營業利益' ? 'operating_income' : label === '業外收支' ? 'non_operating' : label === '稅前淨利' ? 'pretax_income' : label === '稅' ? 'tax' : label === '稅率' ? 'tax_rate' : label === '繼續營業單位損益' ? 'net_income_parent' : label === '歸屬母公司權重' ? 'parent_weight' : label === 'EPS' ? 'eps' : label === '每股盈餘-本業' ? 'eps_core' : label === '每股盈餘-業外' ? 'eps_nonop' : null];
+      html += ev != null ? `<td style="background:#eff6ff;font-weight:600">${fmt === fmtP ? ev.toFixed(1)+'%' : fmt === fmt2 ? ev.toFixed(2) : Math.round(ev/1000000).toLocaleString('zh-TW')}</td>` : '<td style="background:#eff6ff;color:#d1d5db">-</td>';
+      quarters.forEach(q => html += fmt(getter(q)));
+      html += '</tr>';
+    });
+  });
+
+  html += '</tbody></table>';
+  document.getElementById('quarterlyTable').innerHTML = html;
+}
+
+loadData();
+</script>
+</body>
+</html>

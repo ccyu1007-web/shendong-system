@@ -366,7 +366,7 @@
                 let html = '';
 
                 // 股票
-                html += `<td class="stock-code">${s.code}</td>`;
+                html += `<td class="stock-code"><a href="/company?code=${s.code}" target="_blank" style="color:inherit;text-decoration:none">${s.code}</a></td>`;
                 html += `<td class="stock-name">${s.name}</td>`;
                 html += `<td style="text-align:left;font-size:inherit;color:#64748b;white-space:nowrap">${s.industry || '-'}</td>`;
 
