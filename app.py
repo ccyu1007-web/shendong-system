@@ -246,13 +246,15 @@ def debug_tables():
         conn = get_db()
         c = conn.cursor()
         if is_cloud:
-            c.execute("SELECT table_name FROM information_schema.tables WHERE table_schema='public'")
-            tables = [r['table_name'] for r in c.fetchall()]
+            c.execute("SELECT table_schema, table_name FROM information_schema.tables WHERE table_type='BASE TABLE' AND table_schema NOT IN ('pg_catalog','information_schema')")
+            tables = [f"{r['table_schema']}.{r['table_name']}" for r in c.fetchall()]
+            c.execute("SELECT current_database()")
+            db_name = c.fetchone()['current_database']
         else:
             c.execute("SELECT name FROM sqlite_master WHERE type='table'")
             tables = [r['name'] for r in c.fetchall()]
         conn.close()
-        return jsonify({'tables': tables, 'is_cloud': is_cloud, 'db_url_prefix': DATABASE_URL[:30] if DATABASE_URL else None})
+        return jsonify({'tables': tables, 'is_cloud': is_cloud, 'db_name': db_name if is_cloud else 'sqlite', 'db_url_prefix': DATABASE_URL[:30] if DATABASE_URL else None})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
