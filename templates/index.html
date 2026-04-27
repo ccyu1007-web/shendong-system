@@ -108,30 +108,16 @@
             white-space: nowrap;
         }
 
-        thead tr.group-header th {
+        thead tr.sub-header th {
             background: #1e3a5f;
-            letter-spacing: 1px;
-            padding: 5px 10px;
-            border-bottom: 1px solid #2563eb;
+            color: #fff;
+            font-weight: 600;
+            padding: 6px 10px;
+            border-bottom: 2px solid #2563eb;
             top: 0;
         }
 
-        thead tr.sub-header th {
-            background: #2563eb;
-            color: rgba(255,255,255,.9);
-            font-weight: 500;
-            padding: 4px 8px;
-            border-bottom: 2px solid #1e3a5f;
-            top: 28px;
-        }
-
-        .group-stock { color: #fff; }
-        .group-monthly { color: #93c5fd; }
-        .group-change { color: #fbbf24; }
-        .group-qrev { color: #86efac; }
-        .group-qeps { color: #d8b4fe; }
-        .group-div { color: #5eead4; }
-        .group-price { color: #fde68a; }
+        /* 保留供未來使用 */
 
         /* 表身 */
         tbody tr {
@@ -174,22 +160,17 @@
         tbody tr:nth-child(even) td.stock-name { background: #f8fafc; }
         tbody tr:hover td.stock-name { background: #f1f5f9; }
 
-        /* sticky header 也要配合凍結欄 */
         th.sticky-code {
             position: sticky;
             left: 0;
             z-index: 20;
+            background: #1e3a5f !important;
         }
         th.sticky-name {
             position: sticky;
             left: 55px;
             z-index: 20;
-        }
-        /* group-header 第一列的凍結欄 */
-        th.sticky-group {
-            position: sticky;
-            left: 0;
-            z-index: 20;
+            background: #1e3a5f !important;
         }
 
         td.num {
@@ -252,7 +233,6 @@
         <div class="loading" id="loading">載入中...</div>
         <table id="main-table" style="display:none;">
             <thead>
-                <tr class="group-header" id="group-header"></tr>
                 <tr class="sub-header" id="sub-header"></tr>
             </thead>
             <tbody id="tbody"></tbody>
@@ -312,70 +292,60 @@
             // 初始化股價欄位（用逍遙系統收盤價作預設）
             stocks.forEach(s => { s._price = s.close || null; s._change = s.change || null; });
 
-            const gh = document.getElementById('group-header');
             const sh = document.getElementById('sub-header');
 
             // 保存渲染參數供排序後重繪用
             _renderParams = { months, quarterly_cols, last_year_q, current_year_q, current_year, last_year };
 
-            // 股票 (3欄)
-            let ghHtml = `<th colspan="3" class="group-stock sticky-group" style="background:#1e3a5f">股票</th>`;
-            let shHtml = `<th class="sticky-code sortable" style="text-align:left;background:#2563eb" onclick="sortTable('code')">代碼 <span class="sort-arrow" id="sa_code">↕</span></th>` +
-                         `<th class="sticky-name sortable" style="text-align:left;background:#2563eb" onclick="sortTable('name')">名稱 <span class="sort-arrow" id="sa_name">↕</span></th>` +
-                         `<th class="sortable" style="text-align:left;font-size:inherit;color:#64748b" onclick="sortTable('industry')">產業別 <span class="sort-arrow" id="sa_industry">↕</span></th>`;
+            // 單列表頭
+            let shHtml = `<th class="sticky-code sortable" style="text-align:left;background:#1e3a5f" onclick="sortTable('code')">代碼 <span class="sort-arrow" id="sa_code">↕</span></th>` +
+                         `<th class="sticky-name sortable" style="text-align:left;background:#1e3a5f" onclick="sortTable('name')">名稱 <span class="sort-arrow" id="sa_name">↕</span></th>` +
+                         `<th class="sortable" style="text-align:left" onclick="sortTable('industry')">產業別 <span class="sort-arrow" id="sa_industry">↕</span></th>`;
 
             // 月營收
             if (months.length > 0) {
-                ghHtml += `<th colspan="${months.length}" class="group-monthly sep-left">${current_year} 月營收 <span class="unit-hint">(百萬)</span></th>`;
                 months.forEach((m, i) => {
                     shHtml += `<th class="sortable ${i === 0 ? 'sep-left' : ''}" onclick="sortTable('monthly_${m}')">${monthNames[m-1]} <span class="sort-arrow" id="sa_monthly_${m}">↕</span></th>`;
                 });
             }
 
             // 月變動
-            ghHtml += `<th class="group-change sep-left">月變動</th>`;
-            shHtml += `<th class="sortable sep-left" onclick="sortTable('mom_change')">近兩月 <span class="sort-arrow" id="sa_mom_change">↕</span></th>`;
+            shHtml += `<th class="sortable sep-left" onclick="sortTable('mom_change')">月變動 <span class="sort-arrow" id="sa_mom_change">↕</span></th>`;
 
             // 季營收
             if (quarterly_cols.length > 0) {
-                ghHtml += `<th colspan="${quarterly_cols.length}" class="group-qrev sep-left">季營收 <span class="unit-hint">(百萬)</span></th>`;
                 quarterly_cols.forEach((q, i) => {
                     const isFirst = (i === 0);
                     const isYearSep = (i === last_year_q.length && current_year_q.length > 0);
-                    shHtml += `<th class="sortable ${isFirst ? 'sep-left' : (isYearSep ? 'year-sep' : '')}" onclick="sortTable('qrev_${q}')"><span class="sort-arrow" id="sa_qrev_${q}">↕</span> ${q}</th>`;
+                    shHtml += `<th class="sortable ${isFirst ? 'sep-left' : (isYearSep ? 'year-sep' : '')}" onclick="sortTable('qrev_${q}')">營${q} <span class="sort-arrow" id="sa_qrev_${q}">↕</span></th>`;
                 });
             }
 
             // 季EPS(累計)
             if (quarterly_cols.length > 0) {
-                ghHtml += `<th colspan="${quarterly_cols.length + 1}" class="group-qeps sep-left">季EPS(累計)</th>`;
-                shHtml += `<th class="sortable sep-left" onclick="sortTable('eps_date')">更新日 <span class="sort-arrow" id="sa_eps_date">↕</span></th>`;
+                shHtml += `<th class="sortable sep-left" onclick="sortTable('eps_date')">EPS更新 <span class="sort-arrow" id="sa_eps_date">↕</span></th>`;
                 quarterly_cols.forEach((q, i) => {
                     const isYearSep = (i === last_year_q.length && current_year_q.length > 0);
-                    shHtml += `<th class="sortable ${isYearSep ? 'year-sep' : ''}" onclick="sortTable('qeps_${q}')"><span class="sort-arrow" id="sa_qeps_${q}">↕</span> ${q}</th>`;
+                    shHtml += `<th class="sortable ${isYearSep ? 'year-sep' : ''}" onclick="sortTable('qeps_${q}')">EPS${q} <span class="sort-arrow" id="sa_qeps_${q}">↕</span></th>`;
                 });
             }
 
-            // 即時股價 (2欄) — 放在季EPS右側
-            ghHtml += `<th colspan="2" class="group-price sep-left">即時股價</th>`;
+            // 即時股價
             shHtml += `<th class="sortable sep-left" onclick="sortTable('_price')">股價 <span class="sort-arrow" id="sa__price">↕</span></th>`;
             shHtml += `<th class="sortable" onclick="sortTable('_change')">漲跌 <span class="sort-arrow" id="sa__change">↕</span></th>`;
 
-            // 股利（最新一年）
+            // 股利
             const divLabel = stocks.length > 0 ? (stocks.find(s => s.div_label) || {}).div_label : '';
-            const divYear = divLabel ? divLabel + '年' : '';
-            ghHtml += `<th colspan="3" class="group-div sep-left">股利${divYear ? '（' + divYear + '）' : ''}</th>`;
-            shHtml += `<th class="sortable sep-left" onclick="sortTable('div_cash')">現金 <span class="sort-arrow" id="sa_div_cash">↕</span></th>`;
-            shHtml += `<th class="sortable" onclick="sortTable('div_stock')">股票 <span class="sort-arrow" id="sa_div_stock">↕</span></th>`;
-            shHtml += `<th class="sortable" onclick="sortTable('div_total')">合計 <span class="sort-arrow" id="sa_div_total">↕</span></th>`;
+            const divYr = divLabel ? divLabel + '年' : '';
+            shHtml += `<th class="sortable sep-left" onclick="sortTable('div_cash')">現金股利 <span class="sort-arrow" id="sa_div_cash">↕</span></th>`;
+            shHtml += `<th class="sortable" onclick="sortTable('div_stock')">股票股利 <span class="sort-arrow" id="sa_div_stock">↕</span></th>`;
+            shHtml += `<th class="sortable" onclick="sortTable('div_total')">股利合計 <span class="sort-arrow" id="sa_div_total">↕</span></th>`;
 
-            // 沈董本益比
-            ghHtml += `<th colspan="3" class="group-qeps sep-left">沈董</th>`;
-            shHtml += `<th class="sortable sep-left" onclick="sortTable('shen_eps')">EPS <span class="sort-arrow" id="sa_shen_eps">↕</span></th>`;
-            shHtml += `<th class="sortable" onclick="sortTable('shen_pe')">本益比 <span class="sort-arrow" id="sa_shen_pe">↕</span></th>`;
+            // 沈董
+            shHtml += `<th class="sortable sep-left" onclick="sortTable('shen_eps')">沈董EPS <span class="sort-arrow" id="sa_shen_eps">↕</span></th>`;
+            shHtml += `<th class="sortable" onclick="sortTable('shen_pe')">沈董PE <span class="sort-arrow" id="sa_shen_pe">↕</span></th>`;
             shHtml += `<th class="sortable" onclick="sortTable('shen_yld')">殖利率 <span class="sort-arrow" id="sa_shen_yld">↕</span></th>`;
 
-            gh.innerHTML = ghHtml;
             sh.innerHTML = shHtml;
 
             // 表身

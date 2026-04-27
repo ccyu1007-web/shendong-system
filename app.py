@@ -48,7 +48,8 @@ def _api_stocks_cloud():
     last_year = current_year - 1
 
     # 同時取股票清單和批次營收資料
-    stock_resp, rev_resp = req.get(f'{TOCK_API}/api/stocks', timeout=30), req.get(f'{TOCK_API}/api/bulk/revenue', timeout=30)
+    stock_resp = req.get(f'{TOCK_API}/api/stocks', timeout=60)
+    rev_resp = req.get(f'{TOCK_API}/api/bulk/revenue', timeout=60)
     all_stocks = stock_resp.json().get('data', [])
     rev = rev_resp.json()
 
