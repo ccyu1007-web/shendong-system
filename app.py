@@ -20,8 +20,7 @@ def get_db():
     if is_cloud:
         import psycopg2, psycopg2.extras
         url = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
-        conn = psycopg2.connect(url)
-        conn.cursor_factory = psycopg2.extras.RealDictCursor
+        conn = psycopg2.connect(url, cursor_factory=psycopg2.extras.RealDictCursor)
         return conn
     else:
         conn = sqlite3.connect(DB_PATH)
@@ -36,6 +35,7 @@ def index():
 
 @app.route('/api/stocks')
 def api_stocks():
+  try:
     conn = get_db()
     c = conn.cursor()
     ph = '%s' if is_cloud else '?'
@@ -214,6 +214,9 @@ def api_stocks():
         'last_year': last_year,
         'total': len(result),
     })
+  except Exception as e:
+    import traceback
+    return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
 
 
 @app.route('/api/update/quick', methods=['POST'])
