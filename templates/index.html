@@ -290,7 +290,19 @@
             const { stocks, months, quarterly_cols, last_year_q, current_year_q, current_year, last_year } = data;
             allStocks = stocks;
             // 初始化股價欄位（用逍遙系統收盤價作預設）
-            stocks.forEach(s => { s._price = s.close || null; s._change = s.change || null; });
+            stocks.forEach(s => {
+                s._price = s.close || null;
+                s._change = s.change || null;
+                // 載入自行估算（從公司頁面儲存的計算結果）
+                try {
+                    const est = JSON.parse(localStorage.getItem('shendong_est_' + s.code) || '{}');
+                    s._est_gm = est._gm || null;
+                    s._est_gp = est._gp || null;
+                    s._est_opex = est._opex || null;
+                    s._est_nonop = est._nonop || null;
+                    s._est_eps = est._eps || null;
+                } catch(e) {}
+            });
 
             const sh = document.getElementById('sub-header');
 
@@ -345,6 +357,13 @@
             shHtml += `<th class="sortable sep-left" onclick="sortTable('shen_eps')">沈董EPS <span class="sort-arrow" id="sa_shen_eps">↕</span></th>`;
             shHtml += `<th class="sortable" onclick="sortTable('shen_pe')">沈董PE <span class="sort-arrow" id="sa_shen_pe">↕</span></th>`;
             shHtml += `<th class="sortable" onclick="sortTable('shen_yld')">殖利率 <span class="sort-arrow" id="sa_shen_yld">↕</span></th>`;
+
+            // 自行估算
+            shHtml += `<th class="sortable sep-left" onclick="sortTable('est_gm')">估毛利率 <span class="sort-arrow" id="sa_est_gm">↕</span></th>`;
+            shHtml += `<th class="sortable" onclick="sortTable('est_gp')">估毛利 <span class="sort-arrow" id="sa_est_gp">↕</span></th>`;
+            shHtml += `<th class="sortable" onclick="sortTable('est_opex')">估費用 <span class="sort-arrow" id="sa_est_opex">↕</span></th>`;
+            shHtml += `<th class="sortable" onclick="sortTable('est_nonop')">估業外 <span class="sort-arrow" id="sa_est_nonop">↕</span></th>`;
+            shHtml += `<th class="sortable" onclick="sortTable('est_eps')">估EPS <span class="sort-arrow" id="sa_est_eps">↕</span></th>`;
 
             sh.innerHTML = shHtml;
 
@@ -430,6 +449,16 @@
                 html += `<td class="num">${sp != null ? sp.toFixed(2) : '-'}</td>`;
                 html += `<td class="num">${sYld != null ? sYld.toFixed(2) + '%' : '-'}</td>`;
 
+                // 自行估算
+                const egm = s._est_gm, egp = s._est_gp, eop = s._est_opex, eno = s._est_nonop, eeps = s._est_eps;
+                const hasEst = egm != null || egp != null || eop != null || eno != null || eeps != null;
+                const estStyle = hasEst ? 'background:#eff6ff' : '';
+                html += `<td class="num sep-left" style="${estStyle}">${egm != null ? egm.toFixed(1) + '%' : '-'}</td>`;
+                html += `<td class="num" style="${estStyle}">${egp != null ? egp.toLocaleString('zh-TW') : '-'}</td>`;
+                html += `<td class="num" style="${estStyle}">${eop != null ? eop.toLocaleString('zh-TW') : '-'}</td>`;
+                html += `<td class="num" style="${estStyle}">${eno != null ? eno.toLocaleString('zh-TW') : '-'}</td>`;
+                html += `<td class="num" style="${estStyle};font-weight:${eeps != null ? '700' : '400'}">${eeps != null ? eeps.toFixed(2) : '-'}</td>`;
+
                 tr.innerHTML = html;
                 fragment.appendChild(tr);
             });
@@ -455,6 +484,11 @@
             if (key === 'div_total') { const c = s.div_cash, st = s.div_stock; return (c != null || st != null) ? (c||0)+(st||0) : null; }
             if (key === 'shen_eps') return s.shen_eps;
             if (key === 'shen_pe') return s.shen_pe;
+            if (key === 'est_gm') return s._est_gm;
+            if (key === 'est_gp') return s._est_gp;
+            if (key === 'est_opex') return s._est_opex;
+            if (key === 'est_nonop') return s._est_nonop;
+            if (key === 'est_eps') return s._est_eps;
             if (key === 'shen_yld') { const c = s.div_cash, st = s.div_stock, p = s._price; const t = (c!=null||st!=null)?(c||0)+(st||0):null; return (t>0&&p>0)?t/p*100:null; }
             if (key.startsWith('monthly_')) { const m = key.replace('monthly_', ''); return s.monthly[m]; }
             if (key.startsWith('qrev_')) { const q = key.replace('qrev_', ''); return s.quarterly_revenue[q]; }

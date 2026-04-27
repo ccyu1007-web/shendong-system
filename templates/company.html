@@ -156,6 +156,15 @@ function saveEst() {
   ['estRev1','estRev2','estRev3','estGM','estOpex','estNonop','estTax','estPW'].forEach(id => {
     data[id] = document.getElementById(id).value;
   });
+  // 同時儲存計算結果（供總表直接讀取）
+  data._gm = parseNum('estGM');
+  const r1 = parseNum('estRev1'), r2 = parseNum('estRev2'), r3 = parseNum('estRev3');
+  const cumM = [r1,r2,r3].filter(v=>v!=null).reduce((a,b)=>a+b,0) / 1000 || null;
+  data._gp = (cumM && data._gm) ? Math.round(cumM * data._gm / 100) : null;
+  data._opex = parseNum('estOpex');
+  data._nonop = parseNum('estNonop');
+  data._eps = document.getElementById('estEPS').textContent;
+  if (data._eps === '-') data._eps = null; else data._eps = parseFloat(data._eps);
   localStorage.setItem('shendong_est_' + CODE, JSON.stringify(data));
   alert('已儲存');
 }
