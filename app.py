@@ -409,6 +409,9 @@ def api_company_quarterly(code):
 
                 # 毛利率
                 d['gross_margin'] = round(d['gross_profit'] / rev * 100, 2) if rev and d.get('gross_profit') else None
+                # 營業費用占營收比率
+                opex = d.get('operating_expense')
+                d['opex_ratio'] = round(opex / rev * 100, 2) if rev and opex else None
                 # 稅率
                 if pti and pti > 0 and tax is not None:
                     d['tax_rate'] = round(min(max(tax / pti * 100, 0), 100), 2)

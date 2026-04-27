@@ -71,28 +71,32 @@
           <button class="btn-clear" onclick="clearEst()">清除</button>
         </div>
       </div>
-      <div class="est-grid">
-        <label>營收月1（千元）</label><input id="estRev1" type="text" placeholder="千元" oninput="calcEst()">
-        <label>營收月2（千元）</label><input id="estRev2" type="text" placeholder="千元" oninput="calcEst()">
-        <label>營收月3（千元）</label><input id="estRev3" type="text" placeholder="千元" oninput="calcEst()">
-        <label>季營收（百萬）</label><div class="computed" id="estRevQ">-</div>
-        <label>毛利率 %</label><input id="estGM" type="text" placeholder="%" oninput="calcEst()">
-        <label>營業毛利</label><div class="computed" id="estGP">-</div>
-        <label>營業費用（百萬）</label><input id="estOpex" type="text" placeholder="百萬" oninput="calcEst()">
-        <label>營業利益</label><div class="computed" id="estOI">-</div>
-        <label>業外收支（百萬）</label><input id="estNonop" type="text" placeholder="百萬" oninput="calcEst()">
-        <label>稅前淨利</label><div class="computed" id="estPTI">-</div>
-        <label>稅率 %</label><input id="estTax" type="text" placeholder="%" oninput="calcEst()">
-        <label>稅後淨利</label><div class="computed" id="estNI">-</div>
-        <label>歸屬母公司權重 %</label><input id="estPW" type="text" placeholder="%" oninput="calcEst()">
-        <label>歸屬母公司淨利</label><div class="computed" id="estNIP">-</div>
-        <label>加權平均股數（百萬）</label><div class="computed" id="estShares">-</div>
-      </div>
-      <div class="est-grid" style="margin-top:8px;border-top:1px solid #e2e8f0;padding-top:8px">
-        <label>預估 EPS</label><div class="computed" id="estEPS" style="font-size:1rem">-</div>
-        <label>本業 EPS</label><div class="computed" id="estEPScore">-</div>
-        <label>業外 EPS</label><div class="computed" id="estEPSnonop">-</div>
-      </div>
+      <table class="fs-table" style="max-width:500px">
+        <thead><tr><th style="min-width:160px">項目</th><th>輸入 / 計算</th></tr></thead>
+        <tbody>
+          <tr class="section-row"><td colspan="2">損益表 <span style="font-weight:400;color:#6366f1;font-size:.76rem">百萬元</span></td></tr>
+          <tr><td class="row-label">營收月1（千元）</td><td><input id="estRev1" type="text" placeholder="千元" oninput="calcEst()"></td></tr>
+          <tr><td class="row-label">營收月2（千元）</td><td><input id="estRev2" type="text" placeholder="千元" oninput="calcEst()"></td></tr>
+          <tr><td class="row-label">營收月3（千元）</td><td><input id="estRev3" type="text" placeholder="千元" oninput="calcEst()"></td></tr>
+          <tr><td class="row-label">營業收入淨額</td><td class="computed" id="estRevQ">-</td></tr>
+          <tr><td class="row-label">毛利率 %</td><td><input id="estGM" type="text" placeholder="%" oninput="calcEst()"></td></tr>
+          <tr><td class="row-label">營業毛利</td><td class="computed" id="estGP">-</td></tr>
+          <tr><td class="row-label">營業費用</td><td><input id="estOpex" type="text" placeholder="百萬" oninput="calcEst()"></td></tr>
+          <tr><td class="row-label">營業費用占營收比率</td><td class="computed" id="estOpexR">-</td></tr>
+          <tr><td class="row-label">營業利益</td><td class="computed" id="estOI">-</td></tr>
+          <tr><td class="row-label">業外收支</td><td><input id="estNonop" type="text" placeholder="百萬" oninput="calcEst()"></td></tr>
+          <tr><td class="row-label">稅前淨利</td><td class="computed" id="estPTI">-</td></tr>
+          <tr><td class="row-label">稅率 %</td><td><input id="estTax" type="text" placeholder="%" oninput="calcEst()"></td></tr>
+          <tr><td class="row-label">繼續營業單位損益</td><td class="computed" id="estNI">-</td></tr>
+          <tr><td class="row-label">歸屬母公司權重 %</td><td><input id="estPW" type="text" placeholder="%" oninput="calcEst()"></td></tr>
+          <tr><td class="row-label">歸屬母公司淨利</td><td class="computed" id="estNIP">-</td></tr>
+          <tr class="section-row"><td colspan="2">每股數據</td></tr>
+          <tr><td class="row-label">加權平均股數（百萬）</td><td class="computed" id="estShares">-</td></tr>
+          <tr><td class="row-label" style="font-weight:700">預估 EPS</td><td class="computed" id="estEPS" style="font-size:1rem;color:#1e3a5f">-</td></tr>
+          <tr><td class="row-label">每股盈餘-本業</td><td class="computed" id="estEPScore">-</td></tr>
+          <tr><td class="row-label">每股盈餘-業外</td><td class="computed" id="estEPSnonop">-</td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
 </div>
@@ -120,6 +124,8 @@ function calcEst() {
   document.getElementById('estGP').textContent = gp != null ? Math.round(gp).toLocaleString('zh-TW') : '-';
 
   const opex = parseNum('estOpex');
+  const opexR = (cumM != null && opex != null && cumM > 0) ? (opex / cumM * 100) : null;
+  document.getElementById('estOpexR').textContent = opexR != null ? opexR.toFixed(2) + '%' : '-';
   const oi = (gp != null && opex != null) ? gp - opex : null;
   document.getElementById('estOI').textContent = oi != null ? Math.round(oi).toLocaleString('zh-TW') : '-';
 
@@ -244,17 +250,19 @@ function renderQuarterly(quarters, info) {
       ['營業毛利', d => d.gross_profit, fmtM],
       ['毛利率', d => d.gross_margin, fmtP],
       ['營業費用', d => d.operating_expense, fmtM],
+      ['營業費用占營收比率', d => d.opex_ratio, fmtP],
       ['營業利益', d => d.operating_income, fmtM],
       ['業外收支', d => d.non_operating, fmtM],
       ['稅前淨利', d => d.pretax_income, fmtM],
       ['稅', d => d.tax, fmtM],
       ['稅率', d => d.tax_rate, fmtP],
-      ['繼續營業單位損益', d => d.net_income_parent, fmtM],
+      ['繼續營業單位損益', d => d.continuing_income || d.net_income_parent, fmtM],
+      ['歸屬母公司淨利', d => d.net_income_parent, fmtM],
       ['歸屬母公司權重', d => d.parent_weight, fmtP],
     ]},
     { title: '每股數據', rows: [
       ['加權平均股數（千股）', d => d.weighted_shares, fmtShares],
-      ['EPS', d => d.eps, fmt2],
+      ['每股盈餘 (EPS)', d => d.eps, fmt2],
       ['每股盈餘-本業', d => d.eps_core, fmt2],
       ['每股盈餘-業外', d => d.eps_nonop, fmt2],
     ]},
@@ -296,11 +304,13 @@ function renderQuarterly(quarters, info) {
     'gross_profit': egp ? egp * 1000000 : null,
     'gross_margin': egm,
     'operating_expense': eopex ? eopex * 1000000 : null,
+    'opex_ratio': (cumM && eopex && cumM > 0) ? eopex / cumM * 100 : null,
     'operating_income': eoi ? eoi * 1000000 : null,
     'non_operating': enonop ? enonop * 1000000 : null,
     'pretax_income': epti ? epti * 1000000 : null,
     'tax': (epti != null && etax != null) ? epti * etax / 100 * 1000000 : null,
     'tax_rate': etax,
+    'continuing_income': eni ? eni * 1000000 : null,
     'net_income_parent': enip ? enip * 1000000 : null,
     'parent_weight': epw,
     'weighted_shares': _shares ? _shares * 1000000 : null,
@@ -316,7 +326,7 @@ function renderQuarterly(quarters, info) {
     sec.rows.forEach(([label, getter, fmt]) => {
       html += `<tr><td class="row-label">${label}</td>`;
       // 估算欄
-      const labelMap = {'營業收入淨額':'revenue','營業成本':'cost','營業毛利':'gross_profit','毛利率':'gross_margin','營業費用':'operating_expense','營業利益':'operating_income','業外收支':'non_operating','稅前淨利':'pretax_income','稅':'tax','稅率':'tax_rate','繼續營業單位損益':'net_income_parent','歸屬母公司權重':'parent_weight','加權平均股數（千股）':'weighted_shares','EPS':'eps','每股盈餘-本業':'eps_core','每股盈餘-業外':'eps_nonop','合約負債':'contract_liability','存貨':'inventory'};
+      const labelMap = {'營業收入淨額':'revenue','營業成本':'cost','營業毛利':'gross_profit','毛利率':'gross_margin','營業費用':'operating_expense','營業費用占營收比率':'opex_ratio','營業利益':'operating_income','業外收支':'non_operating','稅前淨利':'pretax_income','稅':'tax','稅率':'tax_rate','繼續營業單位損益':'continuing_income','歸屬母公司淨利':'net_income_parent','歸屬母公司權重':'parent_weight','加權平均股數（千股）':'weighted_shares','每股盈餘 (EPS)':'eps','每股盈餘-本業':'eps_core','每股盈餘-業外':'eps_nonop','合約負債':'contract_liability','存貨':'inventory'};
       const ev = estMap[labelMap[label]];
       html += ev != null ? `<td style="background:#eff6ff;font-weight:600">${fmt === fmtP ? ev.toFixed(1)+'%' : fmt === fmt2 ? ev.toFixed(2) : fmt === fmtShares ? Math.round(ev/1000).toLocaleString('zh-TW') : Math.round(ev/1000000).toLocaleString('zh-TW')}</td>` : '<td style="background:#eff6ff;color:#d1d5db">-</td>';
       quarters.forEach(q => html += fmt(getter(q)));
