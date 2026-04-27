@@ -8,26 +8,25 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft JhengHei", sans-serif;
-            background: #0f1923;
-            color: #e0e0e0;
+            font-family: 'Microsoft JhengHei', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #f0f4f8;
+            color: #1a202c;
             font-size: 14px;
         }
 
         .header {
-            background: linear-gradient(135deg, #1a2a3a, #0f1923);
-            border-bottom: 2px solid #2a4a6a;
+            background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+            color: #fff;
             padding: 14px 24px;
             display: flex;
             align-items: center;
             justify-content: space-between;
+            box-shadow: 0 2px 12px rgba(0,0,0,.25);
         }
 
         .header h1 {
-            font-size: 22px;
+            font-size: 1.3rem;
             font-weight: 700;
-            color: #e8c547;
-            letter-spacing: 2px;
         }
 
         .header-right {
@@ -37,21 +36,22 @@
         }
 
         .stats {
-            color: #7a8a9a;
+            color: rgba(255,255,255,.8);
             font-size: 12px;
         }
 
         .btn {
             padding: 6px 14px;
-            border: 1px solid #3a5a7a;
-            background: #1a2a3a;
-            color: #a0b8d0;
-            border-radius: 4px;
+            border: 1px solid rgba(255,255,255,.4);
+            background: rgba(255,255,255,.15);
+            color: #fff;
+            border-radius: 6px;
             cursor: pointer;
             font-size: 12px;
+            font-weight: 600;
             transition: all 0.2s;
         }
-        .btn:hover { background: #2a3a4a; color: #e0e8f0; }
+        .btn:hover { background: rgba(255,255,255,.25); }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
         /* 搜尋 */
@@ -60,23 +60,25 @@
             display: flex;
             align-items: center;
             gap: 12px;
-            background: #131f2b;
-            border-bottom: 1px solid #1e2e3e;
+            background: #fff;
+            border-bottom: 1px solid #e2e8f0;
         }
 
         .search-input {
             padding: 5px 10px;
-            background: #1a2a3a;
-            border: 1px solid #2a4a6a;
-            color: #e0e0e0;
-            border-radius: 4px;
+            background: #fff;
+            border: 1px solid #cbd5e1;
+            color: #1a202c;
+            border-radius: 6px;
             font-size: 13px;
             width: 200px;
+            outline: none;
         }
-        .search-input::placeholder { color: #5a6a7a; }
+        .search-input:focus { border-color: #2563eb; }
+        .search-input::placeholder { color: #94a3b8; }
 
         .filter-info {
-            color: #7a8a9a;
+            color: #64748b;
             font-size: 12px;
         }
 
@@ -87,8 +89,10 @@
         }
 
         table {
-            border-collapse: collapse;
+            border-collapse: separate;
+            border-spacing: 0;
             width: max-content;
+            background: #fff;
         }
 
         /* 表頭 */
@@ -96,7 +100,8 @@
             position: sticky;
             top: 0;
             z-index: 10;
-            background: #1a2a3a;
+            background: #1e3a5f;
+            color: #fff;
             padding: 6px 10px;
             text-align: center;
             font-weight: 600;
@@ -104,62 +109,70 @@
         }
 
         thead tr.group-header th {
-            background: #0f1923;
+            background: #1e3a5f;
             letter-spacing: 1px;
             padding: 5px 10px;
-            border-bottom: 1px solid #2a4a6a;
+            border-bottom: 1px solid #2563eb;
             top: 0;
         }
 
         thead tr.sub-header th {
-            color: #9aa8b8;
+            background: #2563eb;
+            color: rgba(255,255,255,.9);
             font-weight: 500;
             padding: 4px 8px;
-            border-bottom: 2px solid #2a4a6a;
+            border-bottom: 2px solid #1e3a5f;
             top: 28px;
         }
 
-        .group-stock { color: #e8c547; }
-        .group-monthly { color: #4fc3f7; }
-        .group-change { color: #ff9800; }
-        .group-qrev { color: #81c784; }
-        .group-qeps { color: #ce93d8; }
-        .group-div { color: #4db6ac; }
+        .group-stock { color: #fff; }
+        .group-monthly { color: #93c5fd; }
+        .group-change { color: #fbbf24; }
+        .group-qrev { color: #86efac; }
+        .group-qeps { color: #d8b4fe; }
+        .group-div { color: #5eead4; }
+        .group-price { color: #fde68a; }
 
         /* 表身 */
         tbody tr {
-            border-bottom: 1px solid #1a2430;
+            border-bottom: 1px solid #f1f5f9;
             transition: background 0.1s;
         }
-        tbody tr:hover { background: #1a2a3a; }
+        tbody tr:hover { background: #f8fafc; }
+        tbody tr:nth-child(even) { background: #f8fafc; }
+        tbody tr:nth-child(even):hover { background: #f1f5f9; }
 
         tbody td {
             padding: 5px 10px;
             text-align: right;
             white-space: nowrap;
+            border-bottom: 1px solid #f1f5f9;
         }
 
         td.stock-code {
             text-align: left;
             font-weight: 700;
-            color: #e8c547;
-            font-size: 13px;
+            color: #2563eb;
             position: sticky;
             left: 0;
-            background: #0f1923;
+            background: inherit;
             z-index: 5;
         }
-        tbody tr:hover td.stock-code { background: #1a2a3a; }
+        tbody tr:nth-child(odd) td.stock-code { background: #fff; }
+        tbody tr:nth-child(even) td.stock-code { background: #f8fafc; }
+        tbody tr:hover td.stock-code { background: #f1f5f9; }
 
         td.stock-name {
             text-align: left;
-            color: #c0c8d0;
+            color: #334155;
             position: sticky;
             left: 55px;
-            background: #0f1923;
+            background: inherit;
             z-index: 5;
         }
-        tbody tr:hover td.stock-name { background: #1a2a3a; }
+        tbody tr:nth-child(odd) td.stock-name { background: #fff; }
+        tbody tr:nth-child(even) td.stock-name { background: #f8fafc; }
+        tbody tr:hover td.stock-name { background: #f1f5f9; }
 
         /* sticky header 也要配合 */
         th.sticky-code {
@@ -178,33 +191,35 @@
             font-family: "SF Mono", "Menlo", "Consolas", monospace;
         }
 
-        td.positive { color: #ef5350; }
-        td.negative { color: #26a69a; }
+        td.positive { color: #dc2626; }
+        td.negative { color: #16a34a; }
 
-        .group-price { color: #ffd54f; }
-        td.price-val { font-weight: 700; color: #ffd54f; }
+        td.price-val { font-weight: 700; color: #1e3a5f; }
         .rt-badge { display:inline-block; padding:1px 6px; border-radius:3px; background:#059669; color:#fff; font-size:10px; margin-left:6px; }
 
         .sortable { cursor: pointer; user-select: none; }
-        .sortable:hover { color: #e8c547; }
-        .sort-arrow { font-size: 10px; color: #5a6a7a; }
-        .sort-arrow.asc { color: #ef5350; }
-        .sort-arrow.desc { color: #26a69a; }
+        .sortable:hover { color: #fbbf24; }
+        .sort-arrow { font-size: 10px; color: rgba(255,255,255,.5); }
+        .sort-arrow.asc { color: #fbbf24; }
+        .sort-arrow.desc { color: #fbbf24; }
 
-        .sep-left { border-left: 2px solid #2a4a6a; }
-        .year-sep { border-left: 2px dashed #3a5a7a; }
+        .sep-left { border-left: 2px solid #e2e8f0; }
+        .year-sep { border-left: 2px dashed #cbd5e1; }
 
-        td.na { color: #3a4a5a; text-align: center; }
+        td.na { color: #94a3b8; text-align: center; }
 
         .loading {
             text-align: center;
             padding: 80px;
-            color: #5a6a7a;
+            color: #94a3b8;
             font-size: 16px;
         }
 
         /* 營收單位提示 */
-        .unit-hint { font-size: 10px; color: #5a6a7a; font-weight: 400; }
+        .unit-hint { font-size: 10px; color: rgba(255,255,255,.6); font-weight: 400; }
+
+        .inst-pos { color: #dc2626; font-weight: 600; }
+        .inst-neg { color: #16a34a; font-weight: 600; }
     </style>
 </head>
 <body>
@@ -214,9 +229,9 @@
         </div>
         <div class="header-right">
             <span class="stats" id="stats"></span>
-            <label style="font-size:12px;color:#7a8a9a;display:flex;align-items:center;gap:4px;white-space:nowrap">縮放
+            <label style="font-size:12px;color:#64748b;display:flex;align-items:center;gap:4px;white-space:nowrap">縮放
                 <input type="range" id="zoomSlider" min="50" max="150" value="100" step="5" style="width:70px;cursor:pointer" oninput="applyZoom(this.value)">
-                <span id="zoomVal" style="min-width:30px;color:#a0b8d0">100%</span>
+                <span id="zoomVal" style="min-width:30px;color:rgba(255,255,255,.9)">100%</span>
             </label>
             <button class="btn" id="btn-quick" onclick="updateQuick()">快速更新</button>
         </div>
@@ -301,7 +316,7 @@
             let ghHtml = `<th colspan="3" class="group-stock">股票</th>`;
             let shHtml = `<th class="sticky-code sortable" style="text-align:left;background:#1a2a3a" onclick="sortTable('code')">代碼 <span class="sort-arrow" id="sa_code">↕</span></th>` +
                          `<th class="sticky-name sortable" style="text-align:left;background:#1a2a3a" onclick="sortTable('name')">名稱 <span class="sort-arrow" id="sa_name">↕</span></th>` +
-                         `<th class="sortable" style="text-align:left;font-size:inherit;color:#7a8a9a" onclick="sortTable('industry')">產業別 <span class="sort-arrow" id="sa_industry">↕</span></th>`;
+                         `<th class="sortable" style="text-align:left;font-size:inherit;color:#64748b" onclick="sortTable('industry')">產業別 <span class="sort-arrow" id="sa_industry">↕</span></th>`;
 
             // 月營收
             if (months.length > 0) {
@@ -377,7 +392,7 @@
                 // 股票
                 html += `<td class="stock-code">${s.code}</td>`;
                 html += `<td class="stock-name">${s.name}</td>`;
-                html += `<td style="text-align:left;font-size:inherit;color:#7a8a9a;white-space:nowrap">${s.industry || '-'}</td>`;
+                html += `<td style="text-align:left;font-size:inherit;color:#64748b;white-space:nowrap">${s.industry || '-'}</td>`;
 
                 // 月營收
                 if (months.length > 0) {
@@ -403,7 +418,7 @@
                 // 季EPS — 更新日（僅最新季度今日首次出現才紅色）
                 const epsDate = s.eps_date || '-';
                 const isEpsNew = epsDate === _today;
-                const edStyle = isEpsNew ? 'color:#ef5350;font-weight:700' : 'color:#7a8a9a';
+                const edStyle = isEpsNew ? 'color:#ef5350;font-weight:700' : 'color:#64748b';
                 const epsQ = s.eps_latest_q ? `<br><span style="font-size:10px;color:#5a6a7a">${s.eps_latest_q}</span>` : '';
                 html += `<td class="num sep-left" style="font-size:inherit;${edStyle}">${epsDate}${epsQ}</td>`;
 
