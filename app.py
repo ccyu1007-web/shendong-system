@@ -215,14 +215,17 @@ def api_stocks():
             pconn = sqlite3.connect(stock_db_path)
             pconn.row_factory = sqlite3.Row
             for pr in pconn.execute('''SELECT code, close, change, div_c1, div_s1, div_1_label,
-                    eps_date, eps_1, eps_1q, eps_2, eps_2q, eps_3, eps_3q, eps_4, eps_4q, eps_5, eps_5q,
-                    shen_eps FROM stocks'''):
-                price_map[pr['code']] = {
+                    eps_date, eps_1, eps_1q, eps_2, eps_2q, eps_3, eps_3q, eps_4, eps_4q, eps_5, eps_5q
+                    FROM stocks'''):
+                pd = {
                     'close': pr['close'], 'change': pr['change'],
                     'div_cash': pr['div_c1'], 'div_stock': pr['div_s1'], 'div_label': pr['div_1_label'],
                     'eps_date': pr['eps_date'], 'eps_latest_q': pr['eps_1q'],
-                    'shen_eps': pr['shen_eps'],
                 }
+                for i in range(1, 6):
+                    pd[f'eps_{i}q'] = pr[f'eps_{i}q']
+                    pd[f'eps_{i}'] = pr[f'eps_{i}']
+                price_map[pr['code']] = pd
                 # 建立季EPS映射（民國→西元）
                 sq = {}
                 for i in range(1, 6):
@@ -296,8 +299,24 @@ def api_stocks():
                 cum_eps[q] = None
         row['quarterly_eps'] = cum_eps
 
-        # 沈董EPS（從逍遙系統讀取）
-        shen_eps = pdata.get('shen_eps')
+        # 沈董EPS（從 eps_1~eps_5 計算，跟逍遙系統同邏輯）
+        cur_roc = current_year - 1911
+        all_eps = []
+        for i in range(1, 6):
+            q = pdata.get(f'eps_{i}q') if pdata else None
+            v = pdata.get(f'eps_{i}') if pdata else None
+            if q and v is not None:
+                all_eps.append((q, v))
+        cur_year_eps = [(q, v) for q, v in all_eps if q and int(q.split('Q')[0]) == cur_roc]
+        n = len(cur_year_eps)
+        if n >= 4:
+            shen_eps = round(sum(v for _, v in cur_year_eps), 2)
+        elif n > 0:
+            shen_eps = round(sum(v for _, v in cur_year_eps) / n * 4, 2)
+        else:
+            # fallback: 近四季加總
+            eps4 = [v for _, v in all_eps[:4]] if len(all_eps) >= 4 else []
+            shen_eps = round(sum(eps4), 2) if len(eps4) == 4 else None
         row['shen_eps'] = shen_eps
         close = row.get('close')
         row['shen_pe'] = round(close / shen_eps, 2) if shen_eps and shen_eps > 0 and close else None
