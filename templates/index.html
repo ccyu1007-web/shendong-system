@@ -105,7 +105,6 @@
 
         thead tr.group-header th {
             background: #0f1923;
-            font-size: 13px;
             letter-spacing: 1px;
             padding: 5px 10px;
             border-bottom: 1px solid #2a4a6a;
@@ -113,7 +112,6 @@
         }
 
         thead tr.sub-header th {
-            font-size: 12px;
             color: #9aa8b8;
             font-weight: 500;
             padding: 4px 8px;
@@ -178,7 +176,6 @@
         td.num {
             font-variant-numeric: tabular-nums;
             font-family: "SF Mono", "Menlo", "Consolas", monospace;
-            font-size: 13px;
         }
 
         td.positive { color: #ef5350; }
@@ -304,7 +301,7 @@
             let ghHtml = `<th colspan="3" class="group-stock">股票</th>`;
             let shHtml = `<th class="sticky-code sortable" style="text-align:left;background:#1a2a3a" onclick="sortTable('code')">代碼 <span class="sort-arrow" id="sa_code">↕</span></th>` +
                          `<th class="sticky-name sortable" style="text-align:left;background:#1a2a3a" onclick="sortTable('name')">名稱 <span class="sort-arrow" id="sa_name">↕</span></th>` +
-                         `<th class="sortable" style="text-align:left;font-size:11px;color:#7a8a9a" onclick="sortTable('industry')">產業別 <span class="sort-arrow" id="sa_industry">↕</span></th>`;
+                         `<th class="sortable" style="text-align:left;font-size:inherit;color:#7a8a9a" onclick="sortTable('industry')">產業別 <span class="sort-arrow" id="sa_industry">↕</span></th>`;
 
             // 月營收
             if (months.length > 0) {
@@ -380,7 +377,7 @@
                 // 股票
                 html += `<td class="stock-code">${s.code}</td>`;
                 html += `<td class="stock-name">${s.name}</td>`;
-                html += `<td style="text-align:left;font-size:11px;color:#7a8a9a;white-space:nowrap">${s.industry || '-'}</td>`;
+                html += `<td style="text-align:left;font-size:inherit;color:#7a8a9a;white-space:nowrap">${s.industry || '-'}</td>`;
 
                 // 月營收
                 if (months.length > 0) {
@@ -408,7 +405,7 @@
                 const isEpsNew = epsDate === _today;
                 const edStyle = isEpsNew ? 'color:#ef5350;font-weight:700' : 'color:#7a8a9a';
                 const epsQ = s.eps_latest_q ? `<br><span style="font-size:10px;color:#5a6a7a">${s.eps_latest_q}</span>` : '';
-                html += `<td class="num sep-left" style="font-size:11px;${edStyle}">${epsDate}${epsQ}</td>`;
+                html += `<td class="num sep-left" style="font-size:inherit;${edStyle}">${epsDate}${epsQ}</td>`;
 
                 // 季EPS
                 qCols.forEach((q, i) => {

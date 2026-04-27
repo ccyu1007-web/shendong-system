@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: shendong-system
+    runtime: python
+    repo: https://github.com/ccyu1007-web/shendong-system
+    branch: master
+    region: singapore
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 120
+    envVars:
+      - key: DATABASE_URL
+        sync: false  # 手動填入逍遙系統的 PostgreSQL 連線字串
+      - key: PYTHON_VERSION
+        value: "3.11.0"
