@@ -47,71 +47,37 @@ def _api_stocks_cloud():
     current_year = dt.today().year
     last_year = current_year - 1
 
-    # 從逍遙系統取股票清單（含 close/change/div/eps 等所有資料）
-    r = req.get(f'{TOCK_API}/api/stocks', timeout=30)
-    tock = r.json()
-    all_stocks = tock.get('data', [])
+    # 同時取股票清單和批次營收資料
+    stock_resp, rev_resp = req.get(f'{TOCK_API}/api/stocks', timeout=30), req.get(f'{TOCK_API}/api/bulk/revenue', timeout=30)
+    all_stocks = stock_resp.json().get('data', [])
+    rev = rev_resp.json()
 
-    # 從逍遙系統取季報資料
+    months = rev.get('months', [])
+    monthly_map = rev.get('monthly', {})
+    qrev_all = rev.get('quarterly_revenue', {})
+    qeps_all = rev.get('quarterly_eps', {})
+    q_cols = rev.get('quarterly_cols', [])
+
     result = []
-    qrev_map = {}
-    qeps_map = {}
-    all_q_keys = set()
-    eps_date_map = {}
-
-    # 批次取季報（用逍遙系統 quarterly API 太慢，直接從 stocks 資料推算）
     for s in all_stocks:
         code = s['code']
 
-        # 季度 EPS（從 eps_1~eps_5 + eps_1q~eps_5q）
-        for i in range(1, 6):
-            q = s.get(f'eps_{i}q')
-            v = s.get(f'eps_{i}')
-            if q and v is not None:
-                yr_str, qn_str = q.split('Q')
-                yr = int(yr_str) + 1911  # 民國→西元
-                if yr in (last_year, current_year):
-                    key = f'{yr}Q{qn_str}'
-                    all_q_keys.add((yr, int(qn_str), key))
-                    qeps_map.setdefault(code, {})[key] = v
-
-        # EPS 更新日期
-        if s.get('eps_date'):
-            latest_q = s.get('eps_1q', '')
-            eps_date_map[code] = {'date': s['eps_date'], 'quarter': latest_q}
-
-        # 組裝
-        row = {
-            'code': code,
-            'name': s.get('name', ''),
-            'market': s.get('market', ''),
-            'industry': s.get('industry') or '',
-            'close': s.get('close'),
-            'change': s.get('change'),
-            'div_cash': s.get('div_c1'),
-            'div_stock': s.get('div_s1'),
-            'div_label': s.get('div_1_label'),
-            'eps_date': (eps_date_map.get(code) or {}).get('date'),
-            'eps_latest_q': (eps_date_map.get(code) or {}).get('quarter'),
-        }
-
-        # 月營收（逍遙系統 stocks API 沒有月營收明細，先略過）
-        row['monthly'] = {}
-        row['mom_change'] = None
-
-        # 季營收（逍遙系統 stocks API 沒有季營收，先略過）
-        row['quarterly_revenue'] = {}
+        # 月營收
+        m_data = monthly_map.get(code, {})
+        mom_change = None
+        if len(months) >= 2:
+            m1 = m_data.get(str(months[-2]))
+            m2 = m_data.get(str(months[-1]))
+            if m1 and m2 and m1 > 0:
+                mom_change = round((m2 - m1) / m1 * 100, 2)
 
         # 季EPS（累計）
-        qe = qeps_map.get(code, {})
-        sorted_q = sorted(all_q_keys, key=lambda x: (x[0], x[1]))
-        q_cols = [k[2] for k in sorted_q]
+        qe = qeps_all.get(code, {})
         cum_eps = {}
         cum = 0
         prev_year = None
         for q in q_cols:
-            parts = q.split('Q')
-            yr = parts[0]
+            yr = q.split('Q')[0]
             if yr != prev_year:
                 cum = 0
                 prev_year = yr
@@ -121,24 +87,37 @@ def _api_stocks_cloud():
                 cum_eps[q] = round(cum, 2)
             else:
                 cum_eps[q] = None
-        row['quarterly_eps'] = cum_eps
 
         # 沈董EPS
         shen_eps = s.get('shen_eps')
-        row['shen_eps'] = shen_eps
         close = s.get('close')
-        row['shen_pe'] = round(close / shen_eps, 2) if shen_eps and shen_eps > 0 and close else None
 
-        result.append(row)
+        result.append({
+            'code': code,
+            'name': s.get('name', ''),
+            'market': s.get('market', ''),
+            'industry': s.get('industry') or '',
+            'close': close,
+            'change': s.get('change'),
+            'div_cash': s.get('div_c1'),
+            'div_stock': s.get('div_s1'),
+            'div_label': s.get('div_1_label'),
+            'eps_date': s.get('eps_date'),
+            'eps_latest_q': s.get('eps_1q', ''),
+            'monthly': m_data,
+            'mom_change': mom_change,
+            'quarterly_revenue': qrev_all.get(code, {}),
+            'quarterly_eps': cum_eps,
+            'shen_eps': shen_eps,
+            'shen_pe': round(close / shen_eps, 2) if shen_eps and shen_eps > 0 and close else None,
+        })
 
-    sorted_q = sorted(all_q_keys, key=lambda x: (x[0], x[1]))
-    q_cols = [k[2] for k in sorted_q]
     last_year_q = [k for k in q_cols if k.startswith(str(last_year))]
     current_year_q = [k for k in q_cols if k.startswith(str(current_year))]
 
     return jsonify({
         'stocks': result,
-        'months': [],
+        'months': months,
         'quarterly_cols': q_cols,
         'last_year_q': last_year_q,
         'current_year_q': current_year_q,
