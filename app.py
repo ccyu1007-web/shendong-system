@@ -39,17 +39,28 @@ def index():
 
 TOCK_API = 'https://tock-system.onrender.com'
 
+# 雲端快取（避免每次都從逍遙系統重新抓）
+_cloud_cache = None
+_cloud_cache_time = 0
+_CLOUD_CACHE_TTL = 300  # 5 分鐘
+
 def _api_stocks_cloud():
-    """雲端版：從逍遙系統 API 取資料組裝"""
+    """雲端版：從逍遙系統 API 取資料組裝（含快取）"""
     import requests as req
     from datetime import date as dt
+    import time as _time
+    global _cloud_cache, _cloud_cache_time
+
+    # 快取命中
+    if _cloud_cache and (_time.time() - _cloud_cache_time < _CLOUD_CACHE_TTL):
+        return jsonify(_cloud_cache)
 
     current_year = dt.today().year
     last_year = current_year - 1
 
-    # 同時取股票清單和批次營收資料
-    stock_resp = req.get(f'{TOCK_API}/api/stocks', timeout=60)
-    rev_resp = req.get(f'{TOCK_API}/api/bulk/revenue', timeout=60)
+    # 取股票清單和批次營收資料
+    stock_resp = req.get(f'{TOCK_API}/api/stocks', timeout=90)
+    rev_resp = req.get(f'{TOCK_API}/api/bulk/revenue', timeout=90)
     all_stocks = stock_resp.json().get('data', [])
     rev = rev_resp.json()
 
@@ -144,7 +155,7 @@ def _api_stocks_cloud():
     last_year_q = [k for k in q_cols if k.startswith(str(last_year))]
     current_year_q = [k for k in q_cols if k.startswith(str(current_year))]
 
-    return jsonify({
+    resp_data = {
         'stocks': result,
         'months': months,
         'quarterly_cols': q_cols,
@@ -153,7 +164,10 @@ def _api_stocks_cloud():
         'current_year': current_year,
         'last_year': last_year,
         'total': len(result),
-    })
+    }
+    _cloud_cache = resp_data
+    _cloud_cache_time = _time.time()
+    return jsonify(resp_data)
 
 
 @app.route('/api/stocks')
