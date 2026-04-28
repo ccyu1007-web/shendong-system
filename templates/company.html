@@ -217,7 +217,7 @@ async function loadData() {
     }
 
     // 渲染季報表
-    renderQuarterly(quarters, info);
+    await renderQuarterly(quarters, info);
 
     // 載入儲存的估算
     loadEst();
@@ -229,7 +229,7 @@ async function loadData() {
   }
 }
 
-function renderQuarterly(quarters, info) {
+async function renderQuarterly(quarters, info) {
   if (!quarters.length) {
     document.getElementById('quarterlyTable').innerHTML = '<div style="color:#94a3b8;padding:20px">無季報資料</div>';
     return;
