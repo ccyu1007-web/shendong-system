@@ -392,15 +392,19 @@ def api_company_quarterly(code):
             # 股票名稱
             name_row = conn.execute("SELECT name FROM stocks WHERE code = ?", (code,)).fetchone()
             name = name_row['name'] if name_row else code
-            conn.close()
 
-            # 先算一輪股數（EPS 反算），找到有效的做 fallback
+            # 從 financial_annual 讀各年度加權平均股數（千股）
+            _year_shares = {}
+            for sr in conn.execute("SELECT year, weighted_shares FROM financial_annual WHERE code=?", (code,)).fetchall():
+                if sr['weighted_shares']:
+                    _year_shares[sr['year']] = sr['weighted_shares']  # 千股
+            # fallback：EPS 反算
             _fallback_shares = None
             for r in rows:
                 e = r['eps']
                 n = r['net_income_parent']
                 if e and e != 0 and n is not None:
-                    _fallback_shares = n / e
+                    _fallback_shares = n / e  # 股
                     break
 
             data = []
@@ -437,18 +441,31 @@ def api_company_quarterly(code):
                 else:
                     d['tax_rate'] = None
 
-                # 加權平均股數（EPS 反算 or fallback）
+                # 加權平均股數（千股）— 優先用 financial_annual，fallback EPS 反算
+                quarter = d.get('quarter', '')
+                shares_k = None
                 shares_raw = None
-                if eps_val and eps_val != 0 and nip is not None:
+                if quarter:
+                    try:
+                        roc_yr = int(quarter.split('Q')[0])
+                        west_yr = roc_yr + 1911
+                        shares_k = _year_shares.get(west_yr)
+                    except: pass
+                if shares_k:
+                    shares_raw = shares_k * 1000  # 千股→股
+                    d['weighted_shares'] = round(shares_k, 0)
+                elif eps_val and eps_val != 0 and nip is not None:
                     shares_raw = nip / eps_val
+                    d['weighted_shares'] = round(shares_raw / 1000, 0)
                 elif _fallback_shares:
                     shares_raw = _fallback_shares
-                d['weighted_shares'] = round(shares_raw / 1000, 0) if shares_raw else None
+                    d['weighted_shares'] = round(shares_raw / 1000, 0)
+                else:
+                    d['weighted_shares'] = None
 
                 # 歸屬母公司權重 = 歸屬母公司淨利 / 繼續營業單位損益
-                if eps_val is not None and shares_raw and ci and ci != 0:
-                    parent_ni = eps_val * shares_raw
-                    d['parent_weight'] = round(parent_ni / ci * 100, 2)
+                if nip is not None and ci and ci != 0:
+                    d['parent_weight'] = round(nip / ci * 100, 2)
                 else:
                     d['parent_weight'] = None
 
@@ -463,6 +480,7 @@ def api_company_quarterly(code):
 
                 data.append(d)
 
+            conn.close()
             return jsonify({"code": code, "name": name, "data": data})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
