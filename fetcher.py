@@ -70,6 +70,18 @@ def init_db():
     )''')
 
     conn.commit()
+    c.execute('''CREATE TABLE IF NOT EXISTS user_estimates (
+        code TEXT PRIMARY KEY,
+        data TEXT,
+        updated_at TEXT
+    )''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS user_watchlist (
+        code TEXT PRIMARY KEY,
+        added_at TEXT
+    )''')
+
+    conn.commit()
     conn.close()
 
 

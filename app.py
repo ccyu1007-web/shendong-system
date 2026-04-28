@@ -471,6 +471,98 @@ def api_company_info(code):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route('/api/estimates/<code>', methods=['GET'])
+def api_get_estimate(code):
+    """取得個股估算"""
+    try:
+        if is_cloud:
+            import requests as req
+            r = req.get(f'{TOCK_API}/api/shendong/estimates/{code}', timeout=10)
+            return jsonify(r.json())
+        conn = sqlite3.connect(DB_PATH)
+        row = conn.execute("SELECT data FROM user_estimates WHERE code=?", (code,)).fetchone()
+        conn.close()
+        import json
+        return jsonify(json.loads(row[0]) if row else {})
+    except:
+        return jsonify({})
+
+
+@app.route('/api/estimates/<code>', methods=['POST'])
+def api_save_estimate(code):
+    """儲存個股估算"""
+    try:
+        import json
+        data = json.dumps(request.json)
+        if is_cloud:
+            import requests as req
+            r = req.post(f'{TOCK_API}/api/shendong/estimates/{code}', json=request.json, timeout=10)
+            return jsonify(r.json())
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute("INSERT OR REPLACE INTO user_estimates (code, data, updated_at) VALUES (?, ?, datetime('now'))", (code, data))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/estimates', methods=['GET'])
+def api_get_all_estimates():
+    """取得所有估算（總表用）"""
+    try:
+        if is_cloud:
+            import requests as req
+            r = req.get(f'{TOCK_API}/api/shendong/estimates', timeout=10)
+            return jsonify(r.json())
+        conn = sqlite3.connect(DB_PATH)
+        rows = conn.execute("SELECT code, data FROM user_estimates").fetchall()
+        conn.close()
+        import json
+        result = {}
+        for r in rows:
+            result[r[0]] = json.loads(r[1])
+        return jsonify(result)
+    except:
+        return jsonify({})
+
+
+@app.route('/api/watchlist', methods=['GET'])
+def api_get_watchlist():
+    """取得觀察名單"""
+    try:
+        if is_cloud:
+            import requests as req
+            r = req.get(f'{TOCK_API}/api/shendong/watchlist', timeout=10)
+            return jsonify(r.json())
+        conn = sqlite3.connect(DB_PATH)
+        rows = conn.execute("SELECT code FROM user_watchlist ORDER BY added_at").fetchall()
+        conn.close()
+        return jsonify([r[0] for r in rows])
+    except:
+        return jsonify([])
+
+
+@app.route('/api/watchlist', methods=['POST'])
+def api_save_watchlist():
+    """儲存觀察名單（整份覆蓋）"""
+    try:
+        codes = request.json.get('codes', [])
+        if is_cloud:
+            import requests as req
+            r = req.post(f'{TOCK_API}/api/shendong/watchlist', json={'codes': codes}, timeout=10)
+            return jsonify(r.json())
+        conn = sqlite3.connect(DB_PATH)
+        conn.execute("DELETE FROM user_watchlist")
+        for code in codes:
+            conn.execute("INSERT OR IGNORE INTO user_watchlist (code, added_at) VALUES (?, datetime('now'))", (code,))
+        conn.commit()
+        conn.close()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/update/quick', methods=['POST'])
 def api_update_quick():
     """快速更新（清單+月營收）"""

@@ -247,8 +247,19 @@
         const _today = new Date().toISOString().slice(0, 10);
 
         // ── 觀察名單 ──
-        let _watchSet = new Set(JSON.parse(localStorage.getItem('shendong_watchList') || '[]'));
+        let _watchSet = new Set();
         let _watchOnly = false;
+        let _allEstimates = {};
+
+        async function loadUserData() {
+            try {
+                const [wRes, eRes] = await Promise.all([fetch('/api/watchlist'), fetch('/api/estimates')]);
+                const wList = await wRes.json();
+                _watchSet = new Set(wList);
+                _allEstimates = await eRes.json();
+                updateWatchCount();
+            } catch(e) {}
+        }
 
         function toggleWatchFilter() {
             _watchOnly = !_watchOnly;
@@ -262,7 +273,7 @@
             if (el) el.textContent = _watchSet.size ? `${_watchSet.size} 支` : '';
         }
         function saveWatch() {
-            localStorage.setItem('shendong_watchList', JSON.stringify([..._watchSet]));
+            fetch('/api/watchlist', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({codes: [..._watchSet]}) });
             updateWatchCount();
         }
         function openWatchPanel() {
@@ -351,8 +362,8 @@
                     `${stats.stocks} 支 | 月營收 ${stats.monthly_revenue_records} 筆 | 季報 ${stats.quarterly_records} 筆` +
                     (stats.latest_month ? ` | 最新月份 ${stats.latest_month}` : '');
 
+                await loadUserData();
                 renderTable(data);
-                updateWatchCount();
             } catch (e) {
                 document.getElementById('loading').textContent = '載入失敗：' + e.message;
             }
@@ -365,15 +376,13 @@
             stocks.forEach(s => {
                 s._price = s.close || null;
                 s._change = s.change || null;
-                // 載入自行估算（從公司頁面儲存的計算結果）
-                try {
-                    const est = JSON.parse(localStorage.getItem('shendong_est_' + s.code) || '{}');
-                    s._est_gm = est._gm ?? null;
-                    s._est_gp = est._gp ?? null;
-                    s._est_opex = est._opex ?? null;
-                    s._est_nonop = est._nonop ?? null;
-                    s._est_eps = est._eps ?? null;
-                } catch(e) {}
+                // 載入自行估算（從 DB）
+                const est = _allEstimates[s.code] || {};
+                s._est_gm = est._gm ?? null;
+                s._est_gp = est._gp ?? null;
+                s._est_opex = est._opex ?? null;
+                s._est_nonop = est._nonop ?? null;
+                s._est_eps = est._eps ?? null;
             });
 
             const sh = document.getElementById('sub-header');

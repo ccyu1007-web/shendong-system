@@ -151,7 +151,7 @@ function calcEst() {
   document.getElementById('estEPSnonop').textContent = (eps != null && epsCore != null) ? (eps - epsCore).toFixed(2) : '-';
 }
 
-function saveEst() {
+async function saveEst() {
   const data = {};
   ['estRev1','estRev2','estRev3','estGM','estOpex','estNonop','estTax','estPW'].forEach(id => {
     data[id] = document.getElementById(id).value;
@@ -166,24 +166,27 @@ function saveEst() {
   data._nonop = parseNum('estNonop');
   const epsText = document.getElementById('estEPS').textContent;
   data._eps = (epsText && epsText !== '-') ? parseFloat(epsText) : null;
-  localStorage.setItem('shendong_est_' + CODE, JSON.stringify(data));
-  alert('已儲存');
+  try {
+    await fetch(`/api/estimates/${CODE}`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
+    alert('已儲存');
+  } catch(e) { alert('儲存失敗：' + e.message); }
 }
 
-function clearEst() {
+async function clearEst() {
   ['estRev1','estRev2','estRev3','estGM','estOpex','estNonop','estTax','estPW'].forEach(id => {
     document.getElementById(id).value = '';
   });
-  localStorage.removeItem('shendong_est_' + CODE);
+  try { await fetch(`/api/estimates/${CODE}`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' }); } catch(e) {}
   calcEst();
 }
 
-function loadEst() {
+async function loadEst() {
   try {
-    const saved = JSON.parse(localStorage.getItem('shendong_est_' + CODE) || '{}');
+    const res = await fetch(`/api/estimates/${CODE}`);
+    const saved = await res.json();
     Object.entries(saved).forEach(([id, val]) => {
       const el = document.getElementById(id);
-      if (el) el.value = val;
+      if (el && val != null) el.value = val;
     });
     calcEst();
   } catch(e) {}
@@ -288,9 +291,12 @@ function renderQuarterly(quarters, info) {
   quarters.forEach(q => html += `<th>${q.quarter}</th>`);
   html += '</tr></thead><tbody>';
 
-  // 載入估算值用於顯示
+  // 載入估算值用於顯示（從 API 已在 loadEst 載入，這裡從 input 讀取）
   let estData = {};
-  try { estData = JSON.parse(localStorage.getItem('shendong_est_' + CODE) || '{}'); } catch(e) {}
+  try {
+    const estRes = await fetch(`/api/estimates/${CODE}`);
+    estData = await estRes.json();
+  } catch(e) {}
   const pv = s => { if (!s) return null; const v = parseFloat(String(s).replace(/,/g, '')); return isNaN(v) ? null : v; };
   const r1 = pv(estData.estRev1), r2 = pv(estData.estRev2), r3 = pv(estData.estRev3);
   const cumK = [r1,r2,r3].filter(v=>v!=null).reduce((a,b)=>a+b,0) || null;
