@@ -226,8 +226,9 @@
 
     <div class="toolbar">
         <input type="text" class="search-input" id="search" placeholder="搜尋代碼或名稱..." oninput="filterTable()">
-        <button onclick="openWatchPanel()" style="padding:4px 12px;border:1px solid #7c3aed;background:#fff;color:#7c3aed;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">編輯觀察名單</button>
-        <button class="btn" id="btnWatchFilter" onclick="toggleWatchFilter()" style="padding:4px 12px;border:1px solid #2563eb;background:#fff;color:#2563eb;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">顯示觀察 <span id="watchCount"></span></button>
+        <span style="font-size:13px;font-weight:700;color:#64748b">觀察</span>
+        <button id="btnWatchFilter" onclick="toggleWatchFilter()" style="padding:4px 14px;border:2px solid #7c3aed;background:#fff;color:#7c3aed;border-radius:20px;cursor:pointer;font-size:12px;font-weight:700">顯示 <span id="watchCount"></span></button>
+        <button onclick="openWatchPanel()" style="padding:4px 14px;border:2px solid #7c3aed;background:#fff;color:#7c3aed;border-radius:20px;cursor:pointer;font-size:12px;font-weight:700">編輯</button>
         <span class="filter-info" id="filter-info"></span>
     </div>
 
