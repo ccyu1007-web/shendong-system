@@ -367,11 +367,11 @@
                 // 載入自行估算（從公司頁面儲存的計算結果）
                 try {
                     const est = JSON.parse(localStorage.getItem('shendong_est_' + s.code) || '{}');
-                    s._est_gm = est._gm || null;
-                    s._est_gp = est._gp || null;
-                    s._est_opex = est._opex || null;
-                    s._est_nonop = est._nonop || null;
-                    s._est_eps = est._eps || null;
+                    s._est_gm = est._gm ?? null;
+                    s._est_gp = est._gp ?? null;
+                    s._est_opex = est._opex ?? null;
+                    s._est_nonop = est._nonop ?? null;
+                    s._est_eps = est._eps ?? null;
                 } catch(e) {}
             });
 
