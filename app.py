@@ -394,6 +394,15 @@ def api_company_quarterly(code):
             name = name_row['name'] if name_row else code
             conn.close()
 
+            # 先算一輪股數（EPS 反算），找到有效的做 fallback
+            _fallback_shares = None
+            for r in rows:
+                e = r['eps']
+                n = r['net_income_parent']
+                if e and e != 0 and n is not None:
+                    _fallback_shares = n / e
+                    break
+
             data = []
             for r in rows:
                 d = dict(r)
@@ -403,6 +412,7 @@ def api_company_quarterly(code):
                 oi = d.get('operating_income')
                 tax = d.get('tax')
                 eps_val = d.get('eps')
+                ci = d.get('continuing_income')
 
                 # 反算稅額
                 if pti is not None and nip is not None:
@@ -411,34 +421,42 @@ def api_company_quarterly(code):
                         tax = calc_tax
                         d['tax'] = tax
 
+                # 繼續營業單位損益 fallback
+                if ci is None and nip is not None:
+                    ci = nip
+                    d['continuing_income'] = ci
+
                 # 毛利率
                 d['gross_margin'] = round(d['gross_profit'] / rev * 100, 2) if rev and d.get('gross_profit') else None
                 # 營業費用占營收比率
                 opex = d.get('operating_expense')
                 d['opex_ratio'] = round(opex / rev * 100, 2) if rev and opex else None
-                # 稅率
+                # 稅率（虧損不算）
                 if pti and pti > 0 and tax is not None:
                     d['tax_rate'] = round(min(max(tax / pti * 100, 0), 100), 2)
                 else:
                     d['tax_rate'] = None
-                # 歸屬母公司權重
+
+                # 加權平均股數（EPS 反算 or fallback）
                 shares_raw = None
                 if eps_val and eps_val != 0 and nip is not None:
                     shares_raw = nip / eps_val
-                if nip is not None and shares_raw:
-                    parent_ni = round(eps_val * shares_raw, 2) if eps_val else None
-                    ci = nip  # 簡化
-                    d['parent_weight'] = round(parent_ni / ci * 100, 2) if ci and ci != 0 and parent_ni else None
+                elif _fallback_shares:
+                    shares_raw = _fallback_shares
+                d['weighted_shares'] = round(shares_raw / 1000, 0) if shares_raw else None
+
+                # 歸屬母公司權重 = 歸屬母公司淨利 / 繼續營業單位損益
+                if eps_val is not None and shares_raw and ci and ci != 0:
+                    parent_ni = eps_val * shares_raw
+                    d['parent_weight'] = round(parent_ni / ci * 100, 2)
                 else:
                     d['parent_weight'] = None
-                # 加權平均股數（千股）
-                d['weighted_shares'] = round(shares_raw / 1000, 0) if shares_raw else None
 
                 # 本業/業外 EPS
                 eff_tax = tax / pti if pti and pti != 0 and tax is not None else None
                 if oi is not None and shares_raw and eff_tax is not None:
                     d['eps_core'] = round(oi * (1 - eff_tax) / shares_raw, 2)
-                    d['eps_nonop'] = round(eps_val - d['eps_core'], 2) if eps_val else None
+                    d['eps_nonop'] = round(eps_val - d['eps_core'], 2) if eps_val is not None else None
                 else:
                     d['eps_core'] = None
                     d['eps_nonop'] = None
