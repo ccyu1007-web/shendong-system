@@ -230,6 +230,7 @@
         <button id="btnWatchFilter" onclick="toggleWatchFilter()" style="padding:4px 14px;border:2px solid #7c3aed;background:#fff;color:#7c3aed;border-radius:20px;cursor:pointer;font-size:12px;font-weight:700">顯示 <span id="watchCount"></span></button>
         <button onclick="openWatchPanel()" style="padding:4px 14px;border:2px solid #7c3aed;background:#fff;color:#7c3aed;border-radius:20px;cursor:pointer;font-size:12px;font-weight:700">編輯</button>
         <span class="filter-info" id="filter-info"></span>
+        <button onclick="exportCSV()" style="padding:4px 14px;border:1px solid #059669;background:#fff;color:#059669;border-radius:20px;cursor:pointer;font-size:12px;font-weight:700;margin-left:auto">匯出 CSV</button>
     </div>
 
     <div class="table-wrapper">
@@ -703,6 +704,53 @@
             if (si && !si.querySelector('.rt-badge')) {
                 si.innerHTML += '<span class="rt-badge">即時報價</span>';
             }
+        }
+
+        function exportCSV() {
+            const { months, quarterly_cols } = _renderParams;
+            const headers = ['代碼','名稱','產業別'];
+            months.forEach(m => headers.push(monthNames[m-1]+'營收'));
+            headers.push('月變動%');
+            quarterly_cols.forEach(q => headers.push('營'+q));
+            headers.push('EPS更新');
+            quarterly_cols.forEach(q => headers.push('EPS'+q));
+            headers.push('股價','漲跌','現金股利','股票股利','股利合計','沈董EPS','沈董PE','殖利率%','估毛利率','估毛利','估費用','估業外','估EPS','營收備註');
+
+            const rows = [headers.join(',')];
+            const esc = v => {
+                if (v == null) return '';
+                const s = String(v);
+                return s.includes(',') || s.includes('"') || s.includes('\n') ? '"' + s.replace(/"/g,'""') + '"' : s;
+            };
+
+            allStocks.forEach(s => {
+                if (_watchOnly && !_watchSet.has(s.code)) return;
+                const cols = [s.code, s.name, s.industry || ''];
+                months.forEach(m => cols.push(s.monthly[m.toString()] != null ? Math.round(s.monthly[m.toString()] / 1000) : ''));
+                cols.push(s.mom_change != null ? s.mom_change : '');
+                quarterly_cols.forEach(q => cols.push(s.quarterly_revenue[q] != null ? Math.round(s.quarterly_revenue[q] / 1000000) : ''));
+                cols.push(s.eps_date || '');
+                quarterly_cols.forEach(q => cols.push(s.quarterly_eps[q] != null ? s.quarterly_eps[q] : ''));
+                cols.push(s._price != null ? s._price : '', s._change != null ? s._change : '');
+                const dc = s.div_cash, ds = s.div_stock;
+                const dt = (dc != null || ds != null) ? (dc||0)+(ds||0) : '';
+                cols.push(dc != null ? dc : '', ds != null ? ds : '', dt);
+                cols.push(s.shen_eps != null ? s.shen_eps : '', s.shen_pe != null ? s.shen_pe : '');
+                const sYld = (dt && s._price > 0) ? (dt / s._price * 100).toFixed(2) : '';
+                cols.push(sYld);
+                cols.push(s._est_gm != null ? s._est_gm : '', s._est_gp != null ? s._est_gp : '', s._est_opex != null ? s._est_opex : '', s._est_nonop != null ? s._est_nonop : '', s._est_eps != null ? s._est_eps : '');
+                cols.push(s.revenue_note || '');
+                rows.push(cols.map(esc).join(','));
+            });
+
+            const bom = '\uFEFF';
+            const blob = new Blob([bom + rows.join('\n')], {type:'text/csv;charset=utf-8'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `沈董投資系統_${_today}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
         }
 
         loadData().then(() => {
