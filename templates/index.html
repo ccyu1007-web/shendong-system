@@ -371,7 +371,7 @@
         }
 
         function renderTable(data) {
-            const { stocks, months, quarterly_cols, last_year_q, current_year_q, current_year, last_year } = data;
+            const { stocks, months, months_last, quarterly_cols, last_year_q, current_year_q, current_year, last_year, year_3ago } = data;
             allStocks = stocks;
             // 初始化股價欄位（用逍遙系統收盤價作預設）
             stocks.forEach(s => {
@@ -384,35 +384,69 @@
                 s._est_opex = est._opex ?? null;
                 s._est_nonop = est._nonop ?? null;
                 s._est_eps = est._eps ?? null;
+                s._est_div = est._div ?? null;
+                s._est_q1eps = est._q1eps ?? null;
+                // 計算欄位
+                s._est_pretax = (s._est_gp != null && s._est_opex != null) ? s._est_gp - s._est_opex + (s._est_nonop || 0) : null;
+                s._est_aftertax = est._aftertax ?? null;
+                s._est_pe = (s._est_eps != null && s._est_eps > 0 && s._price != null) ? Math.round(s._price / s._est_eps * 100) / 100 : null;
+                s._est_yld = (s._est_div != null && s._est_div > 0 && s._price != null && s._price > 0) ? Math.round(s._est_div / s._price * 10000) / 100 : null;
             });
 
             const sh = document.getElementById('sub-header');
 
             // 保存渲染參數供排序後重繪用
-            _renderParams = { months, quarterly_cols, last_year_q, current_year_q, current_year, last_year };
+            _renderParams = { months, months_last, quarterly_cols, last_year_q, current_year_q, currentYear: current_year, lastYear: last_year, year_3ago };
+
+            const lastYrRoc = last_year - 1911;
+            const curYrRoc = current_year - 1911;
 
             // 單列表頭
             let shHtml = `<th class="sticky-code sortable" style="text-align:left;background:#1e3a5f" onclick="sortTable('code')">代碼 <span class="sort-arrow" id="sa_code">↕</span></th>` +
                          `<th class="sticky-name sortable" style="text-align:left;background:#1e3a5f" onclick="sortTable('name')">名稱 <span class="sort-arrow" id="sa_name">↕</span></th>` +
                          `<th class="sortable" style="text-align:left" onclick="sortTable('industry')">產業別 <span class="sort-arrow" id="sa_industry">↕</span></th>`;
 
-            // 月營收
+            // 去年月營收
+            if (months_last && months_last.length > 0) {
+                months_last.forEach((m, i) => {
+                    shHtml += `<th class="sortable ${i === 0 ? 'sep-left' : ''}" onclick="sortTable('ml_${m}')">${lastYrRoc}年${monthNames[m-1]} <span class="sort-arrow" id="sa_ml_${m}">↕</span></th>`;
+                });
+            }
+
+            // 今年月營收
             if (months.length > 0) {
                 months.forEach((m, i) => {
-                    shHtml += `<th class="sortable ${i === 0 ? 'sep-left' : ''}" onclick="sortTable('monthly_${m}')">${monthNames[m-1]} <span class="sort-arrow" id="sa_monthly_${m}">↕</span></th>`;
+                    shHtml += `<th class="sortable ${i === 0 ? 'sep-left' : ''}" onclick="sortTable('monthly_${m}')">${curYrRoc}年${monthNames[m-1]} <span class="sort-arrow" id="sa_monthly_${m}">↕</span></th>`;
                 });
             }
 
             // 月變動
             shHtml += `<th class="sortable sep-left" onclick="sortTable('mom_change')">月變動 <span class="sort-arrow" id="sa_mom_change">↕</span></th>`;
 
+            // 季毛利率
+            if (quarterly_cols.length > 0) {
+                quarterly_cols.forEach((q, i) => {
+                    const qRoc = q.replace(/^(\d{4})/, (m, y) => parseInt(y) - 1911);
+                    shHtml += `<th class="sortable ${i === 0 ? 'sep-left' : ''}" onclick="sortTable('qgm_${q}')">${qRoc}毛利率 <span class="sort-arrow" id="sa_qgm_${q}">↕</span></th>`;
+                });
+            }
+
             // 季營收
             if (quarterly_cols.length > 0) {
                 quarterly_cols.forEach((q, i) => {
                     const isFirst = (i === 0);
                     const isYearSep = (i === last_year_q.length && current_year_q.length > 0);
-                    shHtml += `<th class="sortable ${isFirst ? 'sep-left' : (isYearSep ? 'year-sep' : '')}" onclick="sortTable('qrev_${q}')">營${q} <span class="sort-arrow" id="sa_qrev_${q}">↕</span></th>`;
+                    shHtml += `<th class="sortable ${isFirst ? 'sep-left' : (isYearSep ? 'year-sep' : '')}" onclick="sortTable('qrev_${q}')">營${q.replace(/^(\d{4})/, (m, y) => parseInt(y) - 1911)} <span class="sort-arrow" id="sa_qrev_${q}">↕</span></th>`;
                 });
+            }
+
+            // 上季變動
+            shHtml += `<th class="sortable sep-left" onclick="sortTable('qoq_change')">季變動 <span class="sort-arrow" id="sa_qoq_change">↕</span></th>`;
+
+            // 歷史年度EPS（3年：year_3ago ~ last_year-1）
+            for (let yr = year_3ago; yr < last_year; yr++) {
+                const rocYr = yr - 1911;
+                shHtml += `<th class="sortable ${yr === year_3ago ? 'sep-left' : ''}" onclick="sortTable('aeps_${yr}')">${rocYr}年EPS <span class="sort-arrow" id="sa_aeps_${yr}">↕</span></th>`;
             }
 
             // 季EPS(累計)
@@ -420,9 +454,12 @@
                 shHtml += `<th class="sortable sep-left" onclick="sortTable('eps_date')">EPS更新 <span class="sort-arrow" id="sa_eps_date">↕</span></th>`;
                 quarterly_cols.forEach((q, i) => {
                     const isYearSep = (i === last_year_q.length && current_year_q.length > 0);
-                    shHtml += `<th class="sortable ${isYearSep ? 'year-sep' : ''}" onclick="sortTable('qeps_${q}')">EPS${q} <span class="sort-arrow" id="sa_qeps_${q}">↕</span></th>`;
+                    shHtml += `<th class="sortable ${isYearSep ? 'year-sep' : ''}" onclick="sortTable('qeps_${q}')">EPS${q.replace(/^(\d{4})/, (m, y) => parseInt(y) - 1911)} <span class="sort-arrow" id="sa_qeps_${q}">↕</span></th>`;
                 });
             }
+
+            // 年度EPS合計
+            shHtml += `<th class="sortable sep-left" onclick="sortTable('annual_eps_total')">${lastYrRoc}年EPS <span class="sort-arrow" id="sa_annual_eps_total">↕</span></th>`;
 
             // 即時股價
             shHtml += `<th class="sortable sep-left" onclick="sortTable('_price')">股價 <span class="sort-arrow" id="sa__price">↕</span></th>`;
@@ -445,7 +482,13 @@
             shHtml += `<th class="sortable" onclick="sortTable('est_gp')">估毛利 <span class="sort-arrow" id="sa_est_gp">↕</span></th>`;
             shHtml += `<th class="sortable" onclick="sortTable('est_opex')">估費用 <span class="sort-arrow" id="sa_est_opex">↕</span></th>`;
             shHtml += `<th class="sortable" onclick="sortTable('est_nonop')">估業外 <span class="sort-arrow" id="sa_est_nonop">↕</span></th>`;
+            shHtml += `<th class="sortable" onclick="sortTable('est_pretax')">估稅前 <span class="sort-arrow" id="sa_est_pretax">↕</span></th>`;
+            shHtml += `<th class="sortable" onclick="sortTable('est_aftertax')">估稅後 <span class="sort-arrow" id="sa_est_aftertax">↕</span></th>`;
+            shHtml += `<th class="sortable" onclick="sortTable('est_q1eps')">預估Q1 EPS <span class="sort-arrow" id="sa_est_q1eps">↕</span></th>`;
             shHtml += `<th class="sortable" onclick="sortTable('est_eps')">估EPS <span class="sort-arrow" id="sa_est_eps">↕</span></th>`;
+            shHtml += `<th class="sortable" onclick="sortTable('est_pe')">預估本益比 <span class="sort-arrow" id="sa_est_pe">↕</span></th>`;
+            shHtml += `<th class="sortable" onclick="sortTable('est_div')">估配息 <span class="sort-arrow" id="sa_est_div">↕</span></th>`;
+            shHtml += `<th class="sortable" onclick="sortTable('est_yld')">估殖利率 <span class="sort-arrow" id="sa_est_yld">↕</span></th>`;
 
             // 營收備註
             shHtml += `<th class="sep-left">營收備註</th>`;
@@ -453,14 +496,14 @@
             sh.innerHTML = shHtml;
 
             // 表身
-            renderRows(stocks, months, quarterly_cols, last_year_q, current_year_q);
+            renderRows(stocks, months, quarterly_cols, last_year_q, current_year_q, months_last, year_3ago, current_year, last_year);
 
             document.getElementById('loading').style.display = 'none';
             document.getElementById('main-table').style.display = 'table';
             document.getElementById('filter-info').textContent = `共 ${stocks.length} 支`;
         }
 
-        function renderRows(stocks, months, qCols, lastYearQ, currentYearQ) {
+        function renderRows(stocks, months, qCols, lastYearQ, currentYearQ, monthsLast, year3ago, currentYear, lastYear) {
             const tbody = document.getElementById('tbody');
             // 用 DocumentFragment 提高渲染效能
             const fragment = document.createDocumentFragment();
@@ -474,7 +517,15 @@
                 html += `<td class="stock-name">${s.name}</td>`;
                 html += `<td style="text-align:left;font-size:inherit;color:#64748b;white-space:nowrap">${s.industry || '-'}</td>`;
 
-                // 月營收
+                // 去年月營收
+                if (monthsLast && monthsLast.length > 0) {
+                    monthsLast.forEach((m, i) => {
+                        const val = s.monthly_last ? s.monthly_last[m.toString()] : null;
+                        html += `<td class="num ${i === 0 ? 'sep-left' : ''}">${val != null ? fmtRevM(val) : '-'}</td>`;
+                    });
+                }
+
+                // 今年月營收
                 if (months.length > 0) {
                     months.forEach((m, i) => {
                         const val = s.monthly[m.toString()];
@@ -486,6 +537,12 @@
                 const chgCls = s.mom_change > 0 ? 'positive' : (s.mom_change < 0 ? 'negative' : '');
                 html += `<td class="num sep-left ${chgCls}">${fmtChange(s.mom_change)}</td>`;
 
+                // 季毛利率
+                qCols.forEach((q, i) => {
+                    const val = s.quarterly_gm ? s.quarterly_gm[q] : null;
+                    html += `<td class="num ${i === 0 ? 'sep-left' : ''}">${val != null ? val.toFixed(1) + '%' : '-'}</td>`;
+                });
+
                 // 季營收
                 qCols.forEach((q, i) => {
                     const isFirst = (i === 0);
@@ -494,6 +551,19 @@
                     const val = s.quarterly_revenue[q];
                     html += `<td class="num ${cls}">${val != null ? fmtQRevM(val) : '-'}</td>`;
                 });
+
+                // 上季變動
+                const qoqCls = s.qoq_change > 0 ? 'positive' : (s.qoq_change < 0 ? 'negative' : '');
+                html += `<td class="num sep-left ${qoqCls}">${fmtChange(s.qoq_change)}</td>`;
+
+                // 歷史年度EPS（3年：year_3ago ~ lastYear-1）
+                if (year3ago && lastYear) {
+                    for (let yr = year3ago; yr < lastYear; yr++) {
+                        const val = s.annual_eps ? s.annual_eps[yr.toString()] : null;
+                        const cls2 = val != null && val < 0 ? 'negative' : '';
+                        html += `<td class="num ${yr === year3ago ? 'sep-left' : ''} ${cls2}">${val != null ? val.toFixed(2) : '-'}</td>`;
+                    }
+                }
 
                 // 季EPS — 更新日（僅最新季度今日首次出現才紅色）
                 const epsDate = s.eps_date || '-';
@@ -510,6 +580,11 @@
                     const epsCls = val != null && val < 0 ? 'negative' : '';
                     html += `<td class="num ${cls} ${epsCls}">${val != null ? fmtEps(val) : '-'}</td>`;
                 });
+
+                // 年度EPS合計
+                const aet = s.annual_eps_total;
+                const aetCls = aet != null && aet < 0 ? 'negative' : '';
+                html += `<td class="num sep-left ${aetCls}" style="font-weight:600">${aet != null ? aet.toFixed(2) : '-'}</td>`;
 
                 // 即時股價（季EPS右側）
                 const p = s._price, chg = s._change;
@@ -536,13 +611,20 @@
 
                 // 自行估算
                 const egm = s._est_gm, egp = s._est_gp, eop = s._est_opex, eno = s._est_nonop, eeps = s._est_eps;
-                const hasEst = egm != null || egp != null || eop != null || eno != null || eeps != null;
+                const eptx = s._est_pretax, eatx = s._est_aftertax, eq1 = s._est_q1eps, epe = s._est_pe, ediv = s._est_div, eyld = s._est_yld;
+                const hasEst = egm != null || egp != null || eop != null || eno != null || eeps != null || ediv != null;
                 const estStyle = hasEst ? 'background:#eff6ff' : '';
                 html += `<td class="num sep-left" style="${estStyle}">${egm != null ? egm.toFixed(1) + '%' : '-'}</td>`;
                 html += `<td class="num" style="${estStyle}">${egp != null ? egp.toLocaleString('zh-TW') : '-'}</td>`;
                 html += `<td class="num" style="${estStyle}">${eop != null ? eop.toLocaleString('zh-TW') : '-'}</td>`;
                 html += `<td class="num" style="${estStyle}">${eno != null ? eno.toLocaleString('zh-TW') : '-'}</td>`;
+                html += `<td class="num" style="${estStyle}">${eptx != null ? eptx.toLocaleString('zh-TW') : '-'}</td>`;
+                html += `<td class="num" style="${estStyle}">${eatx != null ? eatx.toLocaleString('zh-TW') : '-'}</td>`;
+                html += `<td class="num" style="${estStyle}">${eq1 != null ? eq1.toFixed(2) : '-'}</td>`;
                 html += `<td class="num" style="${estStyle};font-weight:${eeps != null ? '700' : '400'}">${eeps != null ? eeps.toFixed(2) : '-'}</td>`;
+                html += `<td class="num" style="${estStyle}">${epe != null ? epe.toFixed(2) : '-'}</td>`;
+                html += `<td class="num" style="${estStyle}">${ediv != null ? ediv.toFixed(2) : '-'}</td>`;
+                html += `<td class="num" style="${estStyle}">${eyld != null ? eyld.toFixed(2) + '%' : '-'}</td>`;
 
                 // 營收備註
                 html += `<td class="sep-left" style="font-size:.78rem;color:#64748b;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${s.revenue_note || ''}">${s.revenue_note || ''}</td>`;
@@ -576,11 +658,22 @@
             if (key === 'est_gp') return s._est_gp;
             if (key === 'est_opex') return s._est_opex;
             if (key === 'est_nonop') return s._est_nonop;
+            if (key === 'est_pretax') return s._est_pretax;
+            if (key === 'est_aftertax') return s._est_aftertax;
+            if (key === 'est_q1eps') return s._est_q1eps;
             if (key === 'est_eps') return s._est_eps;
+            if (key === 'est_pe') return s._est_pe;
+            if (key === 'est_div') return s._est_div;
+            if (key === 'est_yld') return s._est_yld;
+            if (key === 'qoq_change') return s.qoq_change;
+            if (key === 'annual_eps_total') return s.annual_eps_total;
             if (key === 'shen_yld') { const c = s.div_cash, st = s.div_stock, p = s._price; const t = (c!=null||st!=null)?(c||0)+(st||0):null; return (t>0&&p>0)?t/p*100:null; }
+            if (key.startsWith('ml_')) { const m = key.replace('ml_', ''); return s.monthly_last ? s.monthly_last[m] : null; }
             if (key.startsWith('monthly_')) { const m = key.replace('monthly_', ''); return s.monthly[m]; }
+            if (key.startsWith('qgm_')) { const q = key.replace('qgm_', ''); return s.quarterly_gm ? s.quarterly_gm[q] : null; }
             if (key.startsWith('qrev_')) { const q = key.replace('qrev_', ''); return s.quarterly_revenue[q]; }
             if (key.startsWith('qeps_')) { const q = key.replace('qeps_', ''); return s.quarterly_eps[q]; }
+            if (key.startsWith('aeps_')) { const yr = key.replace('aeps_', ''); return s.annual_eps ? s.annual_eps[yr] : null; }
             return null;
         }
 
@@ -603,8 +696,8 @@
                 return _sortAsc ? va - vb : vb - va;
             });
 
-            const { months, quarterly_cols, last_year_q, current_year_q } = _renderParams;
-            renderRows(allStocks, months, quarterly_cols, last_year_q, current_year_q);
+            const { months, months_last, quarterly_cols, last_year_q, current_year_q, year_3ago, currentYear, lastYear } = _renderParams;
+            renderRows(allStocks, months, quarterly_cols, last_year_q, current_year_q, months_last, year_3ago, currentYear, lastYear);
             filterTable();
         }
 
@@ -707,14 +800,22 @@
         }
 
         function exportCSV() {
-            const { months, quarterly_cols } = _renderParams;
+            const { months, months_last, quarterly_cols, year_3ago, currentYear } = _renderParams;
             const headers = ['代碼','名稱','產業別'];
-            months.forEach(m => headers.push(monthNames[m-1]+'營收'));
+            if (months_last) months_last.forEach(m => headers.push((currentYear-1-1911)+'年'+monthNames[m-1]+'營收'));
+            months.forEach(m => headers.push((currentYear-1911)+'年'+monthNames[m-1]+'營收'));
             headers.push('月變動%');
+            quarterly_cols.forEach(q => headers.push('毛利率'+q));
             quarterly_cols.forEach(q => headers.push('營'+q));
+            headers.push('季變動%');
+            const lastYear = currentYear - 1;
+            if (year_3ago) for (let yr = year_3ago; yr < lastYear; yr++) headers.push((yr-1911)+'年EPS');
             headers.push('EPS更新');
             quarterly_cols.forEach(q => headers.push('EPS'+q));
-            headers.push('股價','漲跌','現金股利','股票股利','股利合計','沈董EPS','沈董PE','殖利率%','估毛利率','估毛利','估費用','估業外','估EPS','營收備註');
+            headers.push((lastYear-1911)+'年EPS合計');
+            headers.push('股價','漲跌','現金股利','股票股利','股利合計','沈董EPS','沈董PE','殖利率%');
+            headers.push('估毛利率','估毛利','估費用','估業外','估稅前','估稅後','預估Q1 EPS','估EPS','預估本益比','估配息','估殖利率');
+            headers.push('營收備註');
 
             const rows = [headers.join(',')];
             const esc = v => {
@@ -726,11 +827,16 @@
             allStocks.forEach(s => {
                 if (_watchOnly && !_watchSet.has(s.code)) return;
                 const cols = [s.code, s.name, s.industry || ''];
+                if (months_last) months_last.forEach(m => cols.push(s.monthly_last && s.monthly_last[m.toString()] != null ? Math.round(s.monthly_last[m.toString()] / 1000) : ''));
                 months.forEach(m => cols.push(s.monthly[m.toString()] != null ? Math.round(s.monthly[m.toString()] / 1000) : ''));
                 cols.push(s.mom_change != null ? s.mom_change : '');
+                quarterly_cols.forEach(q => cols.push(s.quarterly_gm && s.quarterly_gm[q] != null ? s.quarterly_gm[q] : ''));
                 quarterly_cols.forEach(q => cols.push(s.quarterly_revenue[q] != null ? Math.round(s.quarterly_revenue[q] / 1000000) : ''));
+                cols.push(s.qoq_change != null ? s.qoq_change : '');
+                if (year_3ago) for (let yr = year_3ago; yr < lastYear; yr++) cols.push(s.annual_eps && s.annual_eps[yr.toString()] != null ? s.annual_eps[yr.toString()] : '');
                 cols.push(s.eps_date || '');
                 quarterly_cols.forEach(q => cols.push(s.quarterly_eps[q] != null ? s.quarterly_eps[q] : ''));
+                cols.push(s.annual_eps_total != null ? s.annual_eps_total : '');
                 cols.push(s._price != null ? s._price : '', s._change != null ? s._change : '');
                 const dc = s.div_cash, ds = s.div_stock;
                 const dt = (dc != null || ds != null) ? (dc||0)+(ds||0) : '';
@@ -738,7 +844,9 @@
                 cols.push(s.shen_eps != null ? s.shen_eps : '', s.shen_pe != null ? s.shen_pe : '');
                 const sYld = (dt && s._price > 0) ? (dt / s._price * 100).toFixed(2) : '';
                 cols.push(sYld);
-                cols.push(s._est_gm != null ? s._est_gm : '', s._est_gp != null ? s._est_gp : '', s._est_opex != null ? s._est_opex : '', s._est_nonop != null ? s._est_nonop : '', s._est_eps != null ? s._est_eps : '');
+                cols.push(s._est_gm != null ? s._est_gm : '', s._est_gp != null ? s._est_gp : '', s._est_opex != null ? s._est_opex : '', s._est_nonop != null ? s._est_nonop : '');
+                cols.push(s._est_pretax != null ? s._est_pretax : '', s._est_aftertax != null ? s._est_aftertax : '', s._est_q1eps != null ? s._est_q1eps : '', s._est_eps != null ? s._est_eps : '');
+                cols.push(s._est_pe != null ? s._est_pe : '', s._est_div != null ? s._est_div : '', s._est_yld != null ? s._est_yld : '');
                 cols.push(s.revenue_note || '');
                 rows.push(cols.map(esc).join(','));
             });

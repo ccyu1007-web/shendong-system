@@ -486,6 +486,140 @@ def fetch_all_quarterly(max_workers=5, delay=0.3):
     return saved_total
 
 
+# ── Push 到 Render ──────────────────────────────────────────
+
+RENDER_URL = 'https://shendong-system.onrender.com'
+SYNC_TOKEN = os.environ.get('SYNC_TOKEN', 'shendong-sync-2026')
+SYNC_HEADERS = {'X-Sync-Token': SYNC_TOKEN}
+
+
+def _push_table_to_render(table, columns, pk, create_sql=None, batch_size=500):
+    """通用全表同步：把本機資料表 push 到 Render"""
+    conn = sqlite3.connect(DB_PATH)
+    col_str = ','.join(columns)
+    rows = conn.execute(f"SELECT {col_str} FROM {table}").fetchall()
+    conn.close()
+
+    if not rows:
+        print(f"  [{table}] 無資料")
+        return 0
+
+    data = [{columns[j]: r[j] for j in range(len(columns))} for r in rows]
+
+    failed = 0
+    for i in range(0, len(data), batch_size):
+        batch = data[i:i+batch_size]
+        try:
+            resp = requests.post(
+                f'{RENDER_URL}/api/sync/table',
+                json={'table': table, 'columns': columns, 'pk': pk,
+                      'create_sql': create_sql or '', 'data': batch},
+                headers=SYNC_HEADERS, timeout=60
+            )
+            if resp.status_code != 200:
+                failed += len(batch)
+        except Exception as e:
+            print(f"  [{table}] batch {i//batch_size+1} 失敗: {e}")
+            failed += len(batch)
+
+    msg = f"  [{table}] {len(data)} 筆"
+    if failed:
+        msg += f"（{failed} 筆失敗）"
+    print(msg)
+    return len(data) - failed
+
+
+def _push_to_render():
+    """本機更新完後，push 所有資料到 Render"""
+    if os.environ.get('DATABASE_URL'):
+        return
+    print("\n[Push to Render] 開始同步...")
+
+    SYNC_TABLES = [
+        {
+            'table': 'stocks',
+            'columns': ['code', 'name', 'market', 'industry', 'updated_at'],
+            'pk': ['code'],
+        },
+        {
+            'table': 'monthly_revenue',
+            'columns': ['code', 'year', 'month', 'revenue'],
+            'pk': ['code', 'year', 'month'],
+            'create_sql': """CREATE TABLE IF NOT EXISTS monthly_revenue (
+                code TEXT NOT NULL, year INTEGER NOT NULL, month INTEGER NOT NULL,
+                revenue REAL, PRIMARY KEY (code, year, month))""",
+        },
+        {
+            'table': 'quarterly_financial',
+            'columns': ['code', 'year', 'quarter', 'revenue', 'cost', 'gross_profit',
+                        'operating_expense', 'operating_income', 'non_operating',
+                        'pretax_income', 'net_income', 'eps', 'updated_at'],
+            'pk': ['code', 'year', 'quarter'],
+            'create_sql': """CREATE TABLE IF NOT EXISTS quarterly_financial (
+                code TEXT NOT NULL, year INTEGER NOT NULL, quarter INTEGER NOT NULL,
+                revenue REAL, cost REAL, gross_profit REAL, operating_expense REAL,
+                operating_income REAL, non_operating REAL, pretax_income REAL,
+                net_income REAL, eps REAL, updated_at TEXT,
+                PRIMARY KEY (code, year, quarter))""",
+        },
+    ]
+
+    for cfg in SYNC_TABLES:
+        try:
+            _push_table_to_render(
+                table=cfg['table'],
+                columns=cfg['columns'],
+                pk=cfg['pk'],
+                create_sql=cfg.get('create_sql'),
+            )
+        except Exception as e:
+            print(f"  [{cfg['table']}] 失敗: {e}")
+
+    # Push stock_info（從逍遙系統 DB 讀取股價/EPS/股利）
+    stock_db_path = os.path.join(os.path.dirname(DB_PATH), '..', 'stock_system', 'stocks.db')
+    if os.path.exists(stock_db_path):
+        try:
+            pconn = sqlite3.connect(stock_db_path)
+            cols = ['code', 'close', 'change', 'div_c1', 'div_s1', 'div_1_label',
+                    'eps_date', 'eps_1', 'eps_1q', 'eps_2', 'eps_2q', 'eps_3', 'eps_3q',
+                    'eps_4', 'eps_4q', 'eps_5', 'eps_5q', 'revenue_note']
+            rows = pconn.execute(f"SELECT {','.join(cols)} FROM stocks").fetchall()
+            pconn.close()
+
+            if rows:
+                data = [{cols[j]: r[j] for j in range(len(cols))} for r in rows]
+                create_sql = """CREATE TABLE IF NOT EXISTS stock_info (
+                    code TEXT PRIMARY KEY, close REAL, change REAL,
+                    div_c1 REAL, div_s1 REAL, div_1_label TEXT,
+                    eps_date TEXT, eps_1 REAL, eps_1q TEXT, eps_2 REAL, eps_2q TEXT,
+                    eps_3 REAL, eps_3q TEXT, eps_4 REAL, eps_4q TEXT,
+                    eps_5 REAL, eps_5q TEXT, revenue_note TEXT)"""
+
+                failed = 0
+                for i in range(0, len(data), 500):
+                    batch = data[i:i+500]
+                    try:
+                        resp = requests.post(
+                            f'{RENDER_URL}/api/sync/table',
+                            json={'table': 'stock_info', 'columns': cols, 'pk': ['code'],
+                                  'create_sql': create_sql, 'data': batch},
+                            headers=SYNC_HEADERS, timeout=60
+                        )
+                        if resp.status_code != 200:
+                            failed += len(batch)
+                    except Exception as e:
+                        print(f"  [stock_info] batch 失敗: {e}")
+                        failed += len(batch)
+                msg = f"  [stock_info] {len(data)} 筆"
+                if failed:
+                    msg += f"（{failed} 筆失敗）"
+                print(msg)
+        except Exception as e:
+            print(f"  [stock_info] 失敗: {e}")
+
+    print("[Push to Render] 完成")
+
+
 # ── 完整更新流程 ──────────────────────────────────────────
 
 def run_full():
@@ -513,6 +647,8 @@ def run_full():
     print(f"\n{'=' * 50}")
     print(f"更新完成！耗時 {elapsed:.1f} 秒")
 
+    _push_to_render()
+
 
 def run_quick():
     """快速更新：清單 + 最新月營收（政府API批次，看誰今天公佈了）"""
@@ -527,6 +663,8 @@ def run_quick():
 
     elapsed = time.time() - t0
     print(f"快速更新完成！耗時 {elapsed:.1f} 秒")
+
+    _push_to_render()
 
 
 if __name__ == '__main__':

@@ -13,6 +13,7 @@ from datetime import date
 
 DATABASE_URL = os.environ.get('DATABASE_URL')
 is_cloud = bool(DATABASE_URL)
+SYNC_TOKEN = os.environ.get('SYNC_TOKEN', 'shendong-sync-2026')
 
 if not is_cloud:
     from fetcher import init_db, fetch_stock_list, fetch_monthly_revenue, fetch_all_quarterly, DB_PATH
@@ -38,6 +39,11 @@ def get_db():
         return conn
 
 
+def check_sync_token():
+    token = request.headers.get('X-Sync-Token') or request.args.get('token')
+    return token == SYNC_TOKEN
+
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -45,148 +51,24 @@ def index():
 
 TOCK_API = 'https://tock-system.onrender.com'
 
-# 雲端快取（避免每次都從逍遙系統重新抓）
-_cloud_cache = None
-_cloud_cache_time = 0
-_CLOUD_CACHE_TTL = 300  # 5 分鐘
-
-def _api_stocks_cloud():
-    """雲端版：從逍遙系統 API 取資料組裝（含快取）"""
-    import requests as req
-    from datetime import date as dt
-    import time as _time
-    global _cloud_cache, _cloud_cache_time
-
-    # 快取命中
-    if _cloud_cache and (_time.time() - _cloud_cache_time < _CLOUD_CACHE_TTL):
-        return jsonify(_cloud_cache)
-
-    current_year = dt.today().year
-    last_year = current_year - 1
-
-    # 取股票清單和批次營收資料
-    stock_resp = req.get(f'{TOCK_API}/api/stocks', timeout=90)
-    rev_resp = req.get(f'{TOCK_API}/api/bulk/revenue', timeout=90)
-    all_stocks = stock_resp.json().get('data', [])
-    rev = rev_resp.json()
-
-    months = rev.get('months', [])
-    monthly_map = rev.get('monthly', {})
-    qrev_all = rev.get('quarterly_revenue', {})
-    q_cols_rev = rev.get('quarterly_cols', [])
-
-    # 季EPS：從 stocks API 的 eps_1~eps_5 建立（跟逍遙系統總表一致）
-    # 收集所有股票的季度標識，建統一欄位
-    all_q_keys = set()
-    stock_qeps = {}  # code -> {quarter_key: eps_value}
-    for s in all_stocks:
-        code = s['code']
-        sq = {}
-        for i in range(1, 6):
-            q = s.get(f'eps_{i}q')  # 民國年格式 e.g. '114Q4'
-            v = s.get(f'eps_{i}')
-            if q and v is not None:
-                roc_yr, qn = q.split('Q')
-                west_yr = int(roc_yr) + 1911
-                if west_yr in (last_year, current_year):
-                    key = f'{west_yr}Q{qn}'
-                    all_q_keys.add((west_yr, int(qn), key))
-                    sq[key] = v
-        stock_qeps[code] = sq
-
-    sorted_q = sorted(all_q_keys, key=lambda x: (x[0], x[1]))
-    q_cols = [k[2] for k in sorted_q]
-    # 季營收用 bulk/revenue 的欄位，補齊到 q_cols 裡沒有的
-    for qc in q_cols_rev:
-        if qc not in q_cols:
-            yr, qn = qc.split('Q')
-            all_q_keys.add((int(yr), int(qn), qc))
-    sorted_q = sorted(all_q_keys, key=lambda x: (x[0], x[1]))
-    q_cols = [k[2] for k in sorted_q]
-
-    result = []
-    for s in all_stocks:
-        code = s['code']
-
-        # 月營收
-        m_data = monthly_map.get(code, {})
-        mom_change = None
-        if len(months) >= 2:
-            m1 = m_data.get(str(months[-2]))
-            m2 = m_data.get(str(months[-1]))
-            if m1 and m2 and m1 > 0:
-                mom_change = round((m2 - m1) / m1 * 100, 2)
-
-        # 季EPS（從 eps_1~eps_5 轉累計）
-        qe = stock_qeps.get(code, {})
-        cum_eps = {}
-        cum = 0
-        prev_year = None
-        for q in q_cols:
-            yr = q.split('Q')[0]
-            if yr != prev_year:
-                cum = 0
-                prev_year = yr
-            v = qe.get(q)
-            if v is not None:
-                cum += v
-                cum_eps[q] = round(cum, 2)
-            else:
-                cum_eps[q] = None
-
-        # 沈董EPS（逍遙系統後端已計算）
-        shen_eps = s.get('shen_eps')
-        close = s.get('close')
-
-        result.append({
-            'code': code,
-            'name': s.get('name', ''),
-            'market': s.get('market', ''),
-            'industry': s.get('industry') or '',
-            'close': close,
-            'change': s.get('change'),
-            'div_cash': s.get('div_c1'),
-            'div_stock': s.get('div_s1'),
-            'div_label': s.get('div_1_label'),
-            'eps_date': s.get('eps_date'),
-            'eps_latest_q': s.get('eps_1q', ''),
-            'revenue_note': s.get('revenue_note') or '',
-            'monthly': m_data,
-            'mom_change': mom_change,
-            'quarterly_revenue': qrev_all.get(code, {}),
-            'quarterly_eps': cum_eps,
-            'shen_eps': shen_eps,
-            'shen_pe': round(close / shen_eps, 2) if shen_eps and shen_eps > 0 and close else None,
-        })
-
-    last_year_q = [k for k in q_cols if k.startswith(str(last_year))]
-    current_year_q = [k for k in q_cols if k.startswith(str(current_year))]
-
-    resp_data = {
-        'stocks': result,
-        'months': months,
-        'quarterly_cols': q_cols,
-        'last_year_q': last_year_q,
-        'current_year_q': current_year_q,
-        'current_year': current_year,
-        'last_year': last_year,
-        'total': len(result),
-    }
-    _cloud_cache = resp_data
-    _cloud_cache_time = _time.time()
-    return jsonify(resp_data)
-
+# 雲端快取
+_stocks_cache = None
+_stocks_cache_time = 0
+_STOCKS_CACHE_TTL = 300  # 5 分鐘
 
 @app.route('/api/stocks')
 def api_stocks():
   try:
-    # 雲端：從逍遙系統 API 取資料再組裝
-    if is_cloud:
-        return _api_stocks_cloud()
+    import time as _time
+    global _stocks_cache, _stocks_cache_time
+
+    # 雲端快取
+    if is_cloud and _stocks_cache and (_time.time() - _stocks_cache_time < _STOCKS_CACHE_TTL):
+        return jsonify(_stocks_cache)
 
     conn = get_db()
     c = conn.cursor()
-    ph = '?'
+    ph = '%s' if is_cloud else '?'
 
     current_year = date.today().year
     last_year = current_year - 1
@@ -195,32 +77,48 @@ def api_stocks():
     c.execute('SELECT code, name, market, industry FROM stocks ORDER BY code')
     stocks = c.fetchall()
 
-    # 月營收（當年度）— 單位：千元
-    c.execute(f'SELECT code, month, revenue FROM monthly_revenue WHERE year={ph} ORDER BY month', (current_year,))
+    # 月營收（去年+今年）— 單位：千元
+    c.execute(f'SELECT code, year, month, revenue FROM monthly_revenue WHERE year IN ({ph},{ph}) ORDER BY year, month', (last_year, current_year))
     monthly = c.fetchall()
 
-    available_months = sorted(set(r['month'] for r in monthly))
+    available_months_last = sorted(set(r['month'] for r in monthly if r['year'] == last_year))
+    available_months = sorted(set(r['month'] for r in monthly if r['year'] == current_year))
 
-    monthly_map = {}
+    monthly_map = {}       # 今年
+    monthly_map_last = {}  # 去年
     for r in monthly:
-        monthly_map.setdefault(r['code'], {})[r['month']] = r['revenue']
+        if r['year'] == current_year:
+            monthly_map.setdefault(r['code'], {})[r['month']] = r['revenue']
+        else:
+            monthly_map_last.setdefault(r['code'], {})[r['month']] = r['revenue']
 
-    # 季度資料（去年+今年）
-    c.execute(f'''SELECT code, year, quarter, revenue, eps FROM quarterly_financial
-           WHERE year IN ({ph},{ph}) ORDER BY year, quarter''', (last_year, current_year))
+    # 季度資料（近5年，供歷史EPS用）
+    year_3ago = last_year - 3
+    c.execute(f'''SELECT code, year, quarter, revenue, gross_profit, eps FROM quarterly_financial
+           WHERE year >= {ph} ORDER BY year, quarter''', (year_3ago,))
     qdata = c.fetchall()
 
-    # 整理季度營收和EPS
+    # 整理季度營收、毛利率、EPS
     qrev_map = {}
     qeps_map = {}
+    qgm_map = {}   # 季毛利率
+    annual_eps_map = {}  # 年度EPS合計 {code: {year: sum}}
     all_q_keys = set()
     for r in qdata:
         key = f"{r['year']}Q{r['quarter']}"
-        all_q_keys.add((r['year'], r['quarter'], key))
+        # 只有去年+今年的季度才列入欄位
+        if r['year'] >= last_year:
+            all_q_keys.add((r['year'], r['quarter'], key))
         if r['revenue'] is not None:
             qrev_map.setdefault(r['code'], {})[key] = r['revenue']
         if r['eps'] is not None:
             qeps_map.setdefault(r['code'], {})[key] = r['eps']
+            # 累加年度EPS
+            annual_eps_map.setdefault(r['code'], {}).setdefault(r['year'], 0)
+            annual_eps_map[r['code']][r['year']] += r['eps']
+        # 季毛利率
+        if r['revenue'] and r['gross_profit'] is not None and r['revenue'] > 0:
+            qgm_map.setdefault(r['code'], {})[key] = round(r['gross_profit'] / r['revenue'] * 100, 2)
 
     # 排序季度欄位
     sorted_q = sorted(all_q_keys, key=lambda x: (x[0], x[1]))
@@ -228,49 +126,58 @@ def api_stocks():
     last_year_q = [k for k in q_cols if k.startswith(str(last_year))]
     current_year_q = [k for k in q_cols if k.startswith(str(current_year))]
 
-    # 從逍遙系統 DB 讀取收盤價 + eps_date + eps_1~eps_5（僅本機）
+    # 讀取股價 + EPS（本機從逍遙系統 DB，雲端從 stock_info 表）
     price_map = {}
     tock_eps = {}  # code -> {quarter_key: eps}
-    stock_db_path = os.path.join(os.path.dirname(DB_PATH), '..', 'stock_system', 'stocks.db')
-    if os.path.exists(stock_db_path):
+    info_rows = []
+    if is_cloud:
         try:
-            pconn = sqlite3.connect(stock_db_path)
-            pconn.row_factory = sqlite3.Row
-            for pr in pconn.execute('''SELECT code, close, change, div_c1, div_s1, div_1_label,
-                    eps_date, eps_1, eps_1q, eps_2, eps_2q, eps_3, eps_3q, eps_4, eps_4q, eps_5, eps_5q,
-                    revenue_note
-                    FROM stocks'''):
-                pd = {
-                    'close': pr['close'], 'change': pr['change'],
-                    'div_cash': pr['div_c1'], 'div_stock': pr['div_s1'], 'div_label': pr['div_1_label'],
-                    'eps_date': pr['eps_date'], 'eps_latest_q': pr['eps_1q'],
-                    'revenue_note': pr['revenue_note'],
-                }
-                for i in range(1, 6):
-                    pd[f'eps_{i}q'] = pr[f'eps_{i}q']
-                    pd[f'eps_{i}'] = pr[f'eps_{i}']
-                price_map[pr['code']] = pd
-                # 建立季EPS映射（民國→西元）
-                sq = {}
-                for i in range(1, 6):
-                    q = pr[f'eps_{i}q']
-                    v = pr[f'eps_{i}']
-                    if q and v is not None:
-                        roc_yr, qn = q.split('Q')
-                        west_yr = int(roc_yr) + 1911
-                        if west_yr in (last_year, current_year):
-                            key = f'{west_yr}Q{qn}'
-                            sq[key] = v
-                            all_q_keys.add((west_yr, int(qn), key))
-                tock_eps[pr['code']] = sq
-            pconn.close()
-            # 重新排序（可能有新欄位加入）
-            sorted_q = sorted(all_q_keys, key=lambda x: (x[0], x[1]))
-            q_cols = [k[2] for k in sorted_q]
-            last_year_q = [k for k in q_cols if k.startswith(str(last_year))]
-            current_year_q = [k for k in q_cols if k.startswith(str(current_year))]
+            c.execute('SELECT code, close, change, div_c1, div_s1, div_1_label, eps_date, eps_1, eps_1q, eps_2, eps_2q, eps_3, eps_3q, eps_4, eps_4q, eps_5, eps_5q, revenue_note FROM stock_info')
+            info_rows = c.fetchall()
         except:
             pass
+    else:
+        stock_db_path = os.path.join(os.path.dirname(DB_PATH), '..', 'stock_system', 'stocks.db')
+        if os.path.exists(stock_db_path):
+            try:
+                pconn = sqlite3.connect(stock_db_path)
+                pconn.row_factory = sqlite3.Row
+                info_rows = pconn.execute('''SELECT code, close, change, div_c1, div_s1, div_1_label,
+                        eps_date, eps_1, eps_1q, eps_2, eps_2q, eps_3, eps_3q, eps_4, eps_4q, eps_5, eps_5q,
+                        revenue_note FROM stocks''').fetchall()
+                pconn.close()
+            except:
+                pass
+
+    for pr in info_rows:
+        pd = {
+            'close': pr['close'], 'change': pr['change'],
+            'div_cash': pr['div_c1'], 'div_stock': pr['div_s1'], 'div_label': pr['div_1_label'],
+            'eps_date': pr['eps_date'], 'eps_latest_q': pr['eps_1q'],
+            'revenue_note': pr['revenue_note'],
+        }
+        for i in range(1, 6):
+            pd[f'eps_{i}q'] = pr[f'eps_{i}q']
+            pd[f'eps_{i}'] = pr[f'eps_{i}']
+        price_map[pr['code']] = pd
+        sq = {}
+        for i in range(1, 6):
+            q = pr[f'eps_{i}q']
+            v = pr[f'eps_{i}']
+            if q and v is not None:
+                roc_yr, qn = q.split('Q')
+                west_yr = int(roc_yr) + 1911
+                if west_yr in (last_year, current_year):
+                    key = f'{west_yr}Q{qn}'
+                    sq[key] = v
+                    all_q_keys.add((west_yr, int(qn), key))
+        tock_eps[pr['code']] = sq
+
+    # 重新排序（可能有新欄位加入）
+    sorted_q = sorted(all_q_keys, key=lambda x: (x[0], x[1]))
+    q_cols = [k[2] for k in sorted_q]
+    last_year_q = [k for k in q_cols if k.startswith(str(last_year))]
+    current_year_q = [k for k in q_cols if k.startswith(str(current_year))]
 
     # 組裝結果
     result = []
@@ -288,7 +195,13 @@ def api_stocks():
             'revenue_note': pdata.get('revenue_note') or '',
         }
 
-        # 月營收
+        # 去年月營收
+        ml_data = monthly_map_last.get(code, {})
+        row['monthly_last'] = {}
+        for m in available_months_last:
+            row['monthly_last'][str(m)] = ml_data.get(m)
+
+        # 今年月營收
         m_data = monthly_map.get(code, {})
         row['monthly'] = {}
         for m in available_months:
@@ -305,6 +218,32 @@ def api_stocks():
         # 季營收
         qr = qrev_map.get(code, {})
         row['quarterly_revenue'] = {q: qr.get(q) for q in q_cols}
+
+        # 季毛利率
+        gm = qgm_map.get(code, {})
+        row['quarterly_gm'] = {q: gm.get(q) for q in q_cols}
+
+        # 上季比較增減(%) — 比較最後兩個有值的季度
+        row['qoq_change'] = None
+        filled_qrevs = [(q, qr[q]) for q in q_cols if qr.get(q)]
+        if len(filled_qrevs) >= 2:
+            prev_qrev = filled_qrevs[-2][1]
+            cur_qrev = filled_qrevs[-1][1]
+            if prev_qrev > 0:
+                row['qoq_change'] = round((cur_qrev - prev_qrev) / prev_qrev * 100, 2)
+
+        # 歷史年度EPS（3年：year_3ago ~ last_year-1）
+        ae = annual_eps_map.get(code, {})
+        row['annual_eps'] = {}
+        for yr in range(year_3ago, last_year):
+            if yr in ae:
+                row['annual_eps'][str(yr)] = round(ae[yr], 2)
+
+        # 去年EPS合計（114年）
+        if last_year in ae:
+            row['annual_eps_total'] = round(ae[last_year], 2)
+        else:
+            row['annual_eps_total'] = None
 
         # 季EPS（用逍遙系統的 eps_1~eps_5 轉累計）
         qe = tock_eps.get(code, {})
@@ -350,19 +289,110 @@ def api_stocks():
 
     conn.close()
 
-    return jsonify({
+    resp_data = {
         'stocks': result,
         'months': available_months,
+        'months_last': available_months_last,
         'quarterly_cols': q_cols,
         'last_year_q': last_year_q,
         'current_year_q': current_year_q,
         'current_year': current_year,
         'last_year': last_year,
+        'year_3ago': year_3ago,
         'total': len(result),
-    })
+    }
+
+    if is_cloud:
+        _stocks_cache = resp_data
+        _stocks_cache_time = _time.time()
+
+    return jsonify(resp_data)
   except Exception as e:
     import traceback
     return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
+
+
+@app.route('/api/sync/table', methods=['POST'])
+def sync_table():
+    """通用全表同步 API — 本機 push 資料到 Render PostgreSQL"""
+    if not check_sync_token():
+        return jsonify({'status': 'error', 'msg': 'unauthorized'}), 403
+    if not request.is_json:
+        return jsonify({'status': 'error', 'msg': 'not json'}), 400
+
+    table = request.json.get('table', '').strip()
+    columns = request.json.get('columns', [])
+    pk = request.json.get('pk', [])
+    rows = request.json.get('data', [])
+    create_sql = request.json.get('create_sql', '')
+
+    ALLOWED_TABLES = {'stocks', 'monthly_revenue', 'quarterly_financial', 'stock_info',
+                      'user_estimates', 'user_watchlist'}
+    if table not in ALLOWED_TABLES:
+        return jsonify({'status': 'error', 'msg': f"table '{table}' not allowed"}), 400
+    if not columns or not rows:
+        return jsonify({'status': 'ok', 'updated': 0, 'msg': 'no data'})
+
+    conn = get_db()
+    c = conn.cursor()
+
+    if create_sql:
+        try:
+            c.execute(create_sql)
+            conn.commit()
+        except:
+            try: conn.rollback()
+            except: pass
+
+    updated = 0
+    errors = []
+    ph = '%s' if is_cloud else '?'
+    placeholders = ','.join([ph] * len(columns))
+
+    if pk:
+        non_pk = [col for col in columns if col not in pk]
+        conflict_clause = ','.join(pk)
+        if non_pk:
+            update_clause = ','.join(f'{col}=EXCLUDED.{col}' for col in non_pk)
+            sql = f"INSERT INTO {table} ({','.join(columns)}) VALUES ({placeholders}) ON CONFLICT({conflict_clause}) DO UPDATE SET {update_clause}"
+        else:
+            sql = f"INSERT INTO {table} ({','.join(columns)}) VALUES ({placeholders}) ON CONFLICT({conflict_clause}) DO NOTHING"
+    else:
+        try:
+            c.execute(f"DELETE FROM {table}")
+            conn.commit()
+        except:
+            try: conn.rollback()
+            except: pass
+        sql = f"INSERT INTO {table} ({','.join(columns)}) VALUES ({placeholders})"
+
+    for r in rows:
+        try:
+            vals = [r.get(col) for col in columns]
+            c.execute(sql, vals)
+            updated += 1
+        except Exception as e:
+            if len(errors) < 3:
+                errors.append(str(e))
+            try: conn.rollback()
+            except: pass
+
+    try:
+        conn.commit()
+    except Exception as e:
+        errors.append(f'commit: {e}')
+        try: conn.rollback()
+        except: pass
+    conn.close()
+
+    # 清除快取讓下次請求讀新資料
+    global _stocks_cache
+    _stocks_cache = None
+
+    result = {'status': 'ok', 'updated': updated}
+    if errors:
+        result['errors'] = errors
+    return jsonify(result)
 
 
 @app.route('/company')
@@ -644,27 +674,22 @@ def debug_tables():
 @app.route('/api/stats')
 def api_stats():
     """資料統計"""
-    if is_cloud:
-        import requests as req
-        try:
-            r = req.get(f'{TOCK_API}/api/status', timeout=10)
-            d = r.json()
-            return jsonify({'stocks': d.get('total', 0), 'monthly_revenue_records': 0, 'quarterly_records': 0, 'latest_month': None, 'source': 'tock-system'})
-        except:
-            return jsonify({'stocks': 0, 'monthly_revenue_records': 0, 'quarterly_records': 0, 'latest_month': None})
-    conn = get_db()
-    c = conn.cursor()
-    stocks = c.execute('SELECT COUNT(*) FROM stocks').fetchone()[0]
-    monthly = c.execute('SELECT COUNT(*) FROM monthly_revenue').fetchone()[0]
-    quarterly = c.execute('SELECT COUNT(*) FROM quarterly_financial').fetchone()[0]
-    latest_month = c.execute('SELECT year, month FROM monthly_revenue ORDER BY year DESC, month DESC LIMIT 1').fetchone()
-    conn.close()
-    return jsonify({
-        'stocks': stocks,
-        'monthly_revenue_records': monthly,
-        'quarterly_records': quarterly,
-        'latest_month': f"{latest_month['year']}/{latest_month['month']}" if latest_month else None,
-    })
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        stocks = c.execute('SELECT COUNT(*) FROM stocks').fetchone()[0]
+        monthly = c.execute('SELECT COUNT(*) FROM monthly_revenue').fetchone()[0]
+        quarterly = c.execute('SELECT COUNT(*) FROM quarterly_financial').fetchone()[0]
+        latest_month = c.execute('SELECT year, month FROM monthly_revenue ORDER BY year DESC, month DESC LIMIT 1').fetchone()
+        conn.close()
+        return jsonify({
+            'stocks': stocks,
+            'monthly_revenue_records': monthly,
+            'quarterly_records': quarterly,
+            'latest_month': f"{latest_month['year']}/{latest_month['month']}" if latest_month else None,
+        })
+    except:
+        return jsonify({'stocks': 0, 'monthly_revenue_records': 0, 'quarterly_records': 0, 'latest_month': None})
 
 
 @app.route('/api/realtime')
