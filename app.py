@@ -366,14 +366,14 @@ def sync_table():
             except: pass
         sql = f"INSERT INTO {table} ({','.join(columns)}) VALUES ({placeholders})"
 
-    all_vals = []
-    for r in rows:
-        all_vals.append([r.get(col) for col in columns])
+    all_vals = [tuple(r.get(col) for col in columns) for r in rows]
 
     try:
         if is_cloud:
-            import psycopg2.extras
-            psycopg2.extras.execute_batch(c, sql, all_vals, page_size=100)
+            from psycopg2.extras import execute_values
+            # 用 execute_values 做 bulk upsert（比 execute_batch 快 10x）
+            tpl = f"({','.join(['%s'] * len(columns))})"
+            execute_values(c, sql.replace(f"VALUES ({placeholders})", "VALUES %s"), all_vals, template=tpl, page_size=200)
         else:
             c.executemany(sql, all_vals)
         updated = len(all_vals)
