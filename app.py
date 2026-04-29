@@ -676,10 +676,14 @@ def api_stats():
     try:
         conn = get_db()
         c = conn.cursor()
-        stocks = c.execute('SELECT COUNT(*) FROM stocks').fetchone()[0]
-        monthly = c.execute('SELECT COUNT(*) FROM monthly_revenue').fetchone()[0]
-        quarterly = c.execute('SELECT COUNT(*) FROM quarterly_financial').fetchone()[0]
-        latest_month = c.execute('SELECT year, month FROM monthly_revenue ORDER BY year DESC, month DESC LIMIT 1').fetchone()
+        c.execute('SELECT COUNT(*) as cnt FROM stocks')
+        stocks = c.fetchone()['cnt']
+        c.execute('SELECT COUNT(*) as cnt FROM monthly_revenue')
+        monthly = c.fetchone()['cnt']
+        c.execute('SELECT COUNT(*) as cnt FROM quarterly_financial')
+        quarterly = c.fetchone()['cnt']
+        c.execute('SELECT year, month FROM monthly_revenue ORDER BY year DESC, month DESC LIMIT 1')
+        latest_month = c.fetchone()
         conn.close()
         return jsonify({
             'stocks': stocks,
