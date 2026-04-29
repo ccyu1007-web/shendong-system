@@ -366,21 +366,20 @@ def sync_table():
             except: pass
         sql = f"INSERT INTO {table} ({','.join(columns)}) VALUES ({placeholders})"
 
+    all_vals = []
     for r in rows:
-        try:
-            vals = [r.get(col) for col in columns]
-            c.execute(sql, vals)
-            updated += 1
-        except Exception as e:
-            if len(errors) < 3:
-                errors.append(str(e))
-            try: conn.rollback()
-            except: pass
+        all_vals.append([r.get(col) for col in columns])
 
     try:
+        if is_cloud:
+            import psycopg2.extras
+            psycopg2.extras.execute_batch(c, sql, all_vals, page_size=100)
+        else:
+            c.executemany(sql, all_vals)
+        updated = len(all_vals)
         conn.commit()
     except Exception as e:
-        errors.append(f'commit: {e}')
+        errors.append(str(e))
         try: conn.rollback()
         except: pass
     conn.close()

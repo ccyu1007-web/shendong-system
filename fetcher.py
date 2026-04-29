@@ -493,7 +493,7 @@ SYNC_TOKEN = os.environ.get('SYNC_TOKEN', 'shendong-sync-2026')
 SYNC_HEADERS = {'X-Sync-Token': SYNC_TOKEN}
 
 
-def _push_table_to_render(table, columns, pk, create_sql=None, batch_size=500):
+def _push_table_to_render(table, columns, pk, create_sql=None, batch_size=200):
     """通用全表同步：把本機資料表 push 到 Render"""
     conn = sqlite3.connect(DB_PATH)
     col_str = ','.join(columns)
@@ -510,13 +510,16 @@ def _push_table_to_render(table, columns, pk, create_sql=None, batch_size=500):
     for i in range(0, len(data), batch_size):
         batch = data[i:i+batch_size]
         try:
+            payload = {'table': table, 'columns': columns, 'pk': pk, 'data': batch}
+            if i == 0 and create_sql:
+                payload['create_sql'] = create_sql
             resp = requests.post(
                 f'{RENDER_URL}/api/sync/table',
-                json={'table': table, 'columns': columns, 'pk': pk,
-                      'create_sql': create_sql or '', 'data': batch},
-                headers=SYNC_HEADERS, timeout=60
+                json=payload,
+                headers=SYNC_HEADERS, timeout=180
             )
             if resp.status_code != 200:
+                print(f"  [{table}] batch {i//batch_size+1} HTTP {resp.status_code}: {resp.text[:200]}")
                 failed += len(batch)
         except Exception as e:
             print(f"  [{table}] batch {i//batch_size+1} 失敗: {e}")
@@ -596,14 +599,16 @@ def _push_to_render():
                     eps_5 REAL, eps_5q TEXT, revenue_note TEXT)"""
 
                 failed = 0
-                for i in range(0, len(data), 500):
-                    batch = data[i:i+500]
+                for i in range(0, len(data), 200):
+                    batch = data[i:i+200]
                     try:
+                        payload = {'table': 'stock_info', 'columns': cols, 'pk': ['code'], 'data': batch}
+                        if i == 0:
+                            payload['create_sql'] = create_sql
                         resp = requests.post(
                             f'{RENDER_URL}/api/sync/table',
-                            json={'table': 'stock_info', 'columns': cols, 'pk': ['code'],
-                                  'create_sql': create_sql, 'data': batch},
-                            headers=SYNC_HEADERS, timeout=60
+                            json=payload,
+                            headers=SYNC_HEADERS, timeout=180
                         )
                         if resp.status_code != 200:
                             failed += len(batch)
