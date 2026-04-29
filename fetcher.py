@@ -493,11 +493,14 @@ SYNC_TOKEN = os.environ.get('SYNC_TOKEN', 'shendong-sync-2026')
 SYNC_HEADERS = {'X-Sync-Token': SYNC_TOKEN}
 
 
-def _push_table_to_render(table, columns, pk, create_sql=None, batch_size=200):
+def _push_table_to_render(table, columns, pk, create_sql=None, where=None, batch_size=500):
     """通用全表同步：把本機資料表 push 到 Render"""
     conn = sqlite3.connect(DB_PATH)
     col_str = ','.join(columns)
-    rows = conn.execute(f"SELECT {col_str} FROM {table}").fetchall()
+    sql = f"SELECT {col_str} FROM {table}"
+    if where:
+        sql += f" {where}"
+    rows = conn.execute(sql).fetchall()
     conn.close()
 
     if not rows:
@@ -509,20 +512,33 @@ def _push_table_to_render(table, columns, pk, create_sql=None, batch_size=200):
     failed = 0
     for i in range(0, len(data), batch_size):
         batch = data[i:i+batch_size]
-        try:
-            payload = {'table': table, 'columns': columns, 'pk': pk, 'data': batch}
-            if i == 0 and create_sql:
-                payload['create_sql'] = create_sql
-            resp = requests.post(
-                f'{RENDER_URL}/api/sync/table',
-                json=payload,
-                headers=SYNC_HEADERS, timeout=180
-            )
-            if resp.status_code != 200:
-                print(f"  [{table}] batch {i//batch_size+1} HTTP {resp.status_code}: {resp.text[:200]}")
-                failed += len(batch)
-        except Exception as e:
-            print(f"  [{table}] batch {i//batch_size+1} 失敗: {e}")
+        payload = {'table': table, 'columns': columns, 'pk': pk, 'data': batch}
+        if i == 0 and create_sql:
+            payload['create_sql'] = create_sql
+        ok = False
+        for attempt in range(3):
+            try:
+                resp = requests.post(
+                    f'{RENDER_URL}/api/sync/table',
+                    json=payload,
+                    headers=SYNC_HEADERS, timeout=180
+                )
+                if resp.status_code == 200:
+                    ok = True
+                    break
+                elif resp.status_code == 502 and attempt < 2:
+                    time.sleep(5)
+                    continue
+                else:
+                    print(f"  [{table}] batch {i//batch_size+1} HTTP {resp.status_code}")
+                    break
+            except Exception as e:
+                if attempt < 2:
+                    time.sleep(5)
+                    continue
+                print(f"  [{table}] batch {i//batch_size+1} 失敗: {e}")
+                break
+        if not ok:
             failed += len(batch)
 
     msg = f"  [{table}] {len(data)} 筆"
@@ -551,6 +567,7 @@ def _push_to_render():
             'create_sql': """CREATE TABLE IF NOT EXISTS monthly_revenue (
                 code TEXT NOT NULL, year INTEGER NOT NULL, month INTEGER NOT NULL,
                 revenue REAL, PRIMARY KEY (code, year, month))""",
+            'where': f"WHERE year >= {date.today().year - 1}",
         },
         {
             'table': 'quarterly_financial',
@@ -564,6 +581,7 @@ def _push_to_render():
                 operating_income REAL, non_operating REAL, pretax_income REAL,
                 net_income REAL, eps REAL, updated_at TEXT,
                 PRIMARY KEY (code, year, quarter))""",
+            'where': f"WHERE year >= {date.today().year - 3}",
         },
     ]
 
@@ -574,6 +592,7 @@ def _push_to_render():
                 columns=cfg['columns'],
                 pk=cfg['pk'],
                 create_sql=cfg.get('create_sql'),
+                where=cfg.get('where'),
             )
         except Exception as e:
             print(f"  [{cfg['table']}] 失敗: {e}")
