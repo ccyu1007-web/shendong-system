@@ -312,6 +312,29 @@ def api_stocks():
     return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
 
 
+@app.route('/api/sync/delete', methods=['POST'])
+def sync_delete():
+    """刪除指定資料"""
+    if not check_sync_token():
+        return jsonify({'status': 'error', 'msg': 'unauthorized'}), 403
+    table = request.json.get('table', '').strip()
+    codes = request.json.get('codes', [])
+    if not table or not codes:
+        return jsonify({'status': 'error', 'msg': 'need table and codes'}), 400
+    ALLOWED = {'stocks', 'monthly_revenue', 'quarterly_financial'}
+    if table not in ALLOWED:
+        return jsonify({'status': 'error', 'msg': 'not allowed'}), 400
+    conn = get_db()
+    c = conn.cursor()
+    deleted = 0
+    for code in codes:
+        c.execute(f"DELETE FROM {table} WHERE code=%s" if is_cloud else f"DELETE FROM {table} WHERE code=?", (code,))
+        deleted += c.rowcount
+    conn.commit()
+    conn.close()
+    return jsonify({'status': 'ok', 'deleted': deleted})
+
+
 @app.route('/api/sync/table', methods=['POST'])
 def sync_table():
     """通用全表同步 API — 本機 push 資料到 Render PostgreSQL"""
