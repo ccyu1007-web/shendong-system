@@ -229,6 +229,7 @@
         <span style="font-size:13px;font-weight:700;color:#64748b">觀察</span>
         <button id="btnWatchFilter" onclick="toggleWatchFilter()" style="padding:4px 14px;border:2px solid #7c3aed;background:#fff;color:#7c3aed;border-radius:20px;cursor:pointer;font-size:12px;font-weight:700">顯示 <span id="watchCount"></span></button>
         <button onclick="openWatchPanel()" style="padding:4px 14px;border:2px solid #7c3aed;background:#fff;color:#7c3aed;border-radius:20px;cursor:pointer;font-size:12px;font-weight:700">編輯</button>
+        <button id="btnLastYearRev" onclick="toggleLastYearRev()" style="padding:4px 14px;border:1px solid #d97706;background:#fff;color:#d97706;border-radius:20px;cursor:pointer;font-size:12px;font-weight:700">去年營收</button>
         <span class="filter-info" id="filter-info"></span>
         <button onclick="exportCSV()" style="padding:4px 14px;border:1px solid #059669;background:#fff;color:#059669;border-radius:20px;cursor:pointer;font-size:12px;font-weight:700;margin-left:auto">匯出 CSV</button>
     </div>
@@ -350,6 +351,23 @@
 
         const monthNames = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 
+        // 去年營收隱藏狀態
+        let _showLastYearRev = JSON.parse(localStorage.getItem('showLastYearRev') || 'false');
+        function toggleLastYearRev() {
+            _showLastYearRev = !_showLastYearRev;
+            localStorage.setItem('showLastYearRev', JSON.stringify(_showLastYearRev));
+            updateLastYearRevBtn();
+            if (_lastData) renderTable(_lastData);
+        }
+        function updateLastYearRevBtn() {
+            const btn = document.getElementById('btnLastYearRev');
+            if (btn) {
+                btn.style.background = _showLastYearRev ? '#d97706' : '#fff';
+                btn.style.color = _showLastYearRev ? '#fff' : '#d97706';
+            }
+        }
+        let _lastData = null;
+
         async function loadData() {
             try {
                 const [stockResp, statResp] = await Promise.all([
@@ -364,6 +382,7 @@
                     (stats.latest_month ? ` | 最新月份 ${stats.latest_month}` : '');
 
                 await loadUserData();
+                updateLastYearRevBtn();
                 renderTable(data);
             } catch (e) {
                 document.getElementById('loading').textContent = '載入失敗：' + e.message;
@@ -371,8 +390,27 @@
         }
 
         function renderTable(data) {
-            const { stocks, months, months_last, quarterly_cols, last_year_q, current_year_q, current_year, last_year, year_3ago } = data;
+            _lastData = data;
+            const { stocks, months, quarterly_cols, last_year_q, current_year_q, current_year, last_year, year_3ago } = data;
+            let { months_last } = data;
             allStocks = stocks;
+
+            // 滑動視窗：當年度 12 個月滿了且隔年第一個月出來，前年的月營收不顯示
+            // 例：115年 12 個月都有 + 116年1月有 → 114年月營收隱藏
+            const hasFullYear = months.length >= 12;
+            // 如果 months_last 已經是前年的（因為當年滿了），就不顯示
+            // API 回傳的 months_last 是去年的，當年如果滿 12 個月，去年就變成「前年」的概念
+            // 但實際上只有「新年度第一個月出來」時才隱藏
+            // 簡化：months 有 12 個月 → 去年月營收預設隱藏（按鈕可展開）
+            if (hasFullYear && !_showLastYearRev) {
+                months_last = [];
+            }
+
+            // 隱藏按鈕狀態
+            if (!_showLastYearRev && data.months_last && data.months_last.length > 0) {
+                // 有去年資料但隱藏中
+            }
+            updateLastYearRevBtn();
             // 初始化股價欄位（用逍遙系統收盤價作預設）
             stocks.forEach(s => {
                 s._price = s.close || null;
