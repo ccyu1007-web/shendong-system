@@ -332,6 +332,8 @@ def sync_delete():
         deleted += c.rowcount
     conn.commit()
     conn.close()
+    global _stocks_cache
+    _stocks_cache = None
     return jsonify({'status': 'ok', 'deleted': deleted})
 
 
