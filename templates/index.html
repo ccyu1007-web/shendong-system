@@ -352,7 +352,7 @@
         const monthNames = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
 
         // 去年營收隱藏狀態
-        let _showLastYearRev = JSON.parse(localStorage.getItem('showLastYearRev') || 'false');
+        let _showLastYearRev = JSON.parse(localStorage.getItem('showLastYearRev') ?? 'true');
         function toggleLastYearRev() {
             _showLastYearRev = !_showLastYearRev;
             localStorage.setItem('showLastYearRev', JSON.stringify(_showLastYearRev));
@@ -395,20 +395,11 @@
             let { months_last } = data;
             allStocks = stocks;
 
-            // 滑動視窗：當年度 12 個月滿了且隔年第一個月出來，前年的月營收不顯示
-            // 例：115年 12 個月都有 + 116年1月有 → 114年月營收隱藏
-            const hasFullYear = months.length >= 12;
-            // 如果 months_last 已經是前年的（因為當年滿了），就不顯示
-            // API 回傳的 months_last 是去年的，當年如果滿 12 個月，去年就變成「前年」的概念
-            // 但實際上只有「新年度第一個月出來」時才隱藏
-            // 簡化：months 有 12 個月 → 去年月營收預設隱藏（按鈕可展開）
-            if (hasFullYear && !_showLastYearRev) {
+            // 去年月營收隱藏控制
+            // 按鈕關閉 → 隱藏去年月營收
+            // 滑動視窗：當年度滿12個月 → 預設隱藏（首次載入時）
+            if (!_showLastYearRev) {
                 months_last = [];
-            }
-
-            // 隱藏按鈕狀態
-            if (!_showLastYearRev && data.months_last && data.months_last.length > 0) {
-                // 有去年資料但隱藏中
             }
             updateLastYearRevBtn();
             // 初始化股價欄位（用逍遙系統收盤價作預設）
