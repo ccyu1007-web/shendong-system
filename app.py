@@ -338,6 +338,37 @@ def api_stocks():
         return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
 
 
+# ── 除錯（確認連到哪個 DB）──
+
+@app.route('/api/debug-db')
+def debug_db():
+    try:
+        conn = get_db()
+        c = conn.cursor()
+        if is_cloud:
+            c.execute("SELECT current_database()")
+            db_name = c.fetchone()['current_database']
+            c.execute("SELECT COUNT(*) as cnt FROM stocks")
+            cnt = c.fetchone()['cnt']
+            # 確認 quarter 欄位型態
+            c.execute("""SELECT data_type FROM information_schema.columns
+                        WHERE table_name='quarterly_financial' AND column_name='quarter'""")
+            qtype = c.fetchone()
+        else:
+            db_name = 'sqlite'
+            cnt = 0
+            qtype = None
+        conn.close()
+        return jsonify({
+            'db_name': db_name,
+            'stocks_count': cnt,
+            'quarter_type': qtype['data_type'] if qtype else 'unknown',
+            'db_url_prefix': DATABASE_URL[:50] + '...' if DATABASE_URL else None,
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)})
+
+
 # ── 多清單 API ──
 
 LIST_TYPES = ('watch', 'hold', 'focus', 'skip')
