@@ -350,23 +350,28 @@ def debug_db():
             db_name = c.fetchone()['current_database']
             c.execute("SELECT COUNT(*) as cnt FROM stocks")
             cnt = c.fetchone()['cnt']
-            # 確認 quarter 欄位型態
-            c.execute("""SELECT data_type FROM information_schema.columns
-                        WHERE table_name='quarterly_financial' AND column_name='quarter'""")
-            qtype = c.fetchone()
+            # 確認所有欄位
+            c.execute("""SELECT column_name, data_type FROM information_schema.columns
+                        WHERE table_name='quarterly_financial' ORDER BY ordinal_position""")
+            cols = {r['column_name']: r['data_type'] for r in c.fetchall()}
+            # 抽樣一筆
+            c.execute("SELECT * FROM quarterly_financial LIMIT 1")
+            sample = dict(c.fetchone()) if c.rowcount else {}
         else:
             db_name = 'sqlite'
             cnt = 0
-            qtype = None
+            cols = {}
+            sample = {}
         conn.close()
         return jsonify({
             'db_name': db_name,
             'stocks_count': cnt,
-            'quarter_type': qtype['data_type'] if qtype else 'unknown',
-            'db_url_prefix': DATABASE_URL[:50] + '...' if DATABASE_URL else None,
+            'quarterly_columns': cols,
+            'sample_row': sample,
         })
     except Exception as e:
-        return jsonify({'error': str(e)})
+        import traceback
+        return jsonify({'error': str(e), 'trace': traceback.format_exc()[:500]})
 
 
 # ── 多清單 API ──
