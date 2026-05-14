@@ -30,11 +30,13 @@ if Compress:
 def get_db():
     """連線到逍遙系統的 DB（本機 SQLite / Render PostgreSQL）"""
     if is_cloud:
+        import re as _re
         import psycopg2, psycopg2.extras
         url = DATABASE_URL.replace('postgres://', 'postgresql://', 1)
-        sep = '&' if '?' in url else '?'
-        if 'sslmode' not in url:
-            url += sep + 'sslmode=require'
+        # 清理 URL（移除所有空白、換行）再加回正確的 sslmode
+        url = _re.sub(r'\s+', '', url)
+        url = _re.sub(r'[?&]sslmode=[^&]*', '', url)
+        url += '?sslmode=require'
         conn = psycopg2.connect(url, cursor_factory=psycopg2.extras.RealDictCursor)
         return conn
     else:
