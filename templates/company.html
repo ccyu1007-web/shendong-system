@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-cache">
 <title>個股資料</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -95,6 +96,9 @@
           <tr><td class="row-label" style="font-weight:700">預估 EPS</td><td class="computed" id="estEPS" style="font-size:1rem;color:#1e3a5f">-</td></tr>
           <tr><td class="row-label">每股盈餘-本業</td><td class="computed" id="estEPScore">-</td></tr>
           <tr><td class="row-label">每股盈餘-業外</td><td class="computed" id="estEPSnonop">-</td></tr>
+          <tr class="section-row"><td colspan="2">估值</td></tr>
+          <tr><td class="row-label">預估配息</td><td><input id="estDiv" type="text" placeholder="元" oninput="calcEst()"></td></tr>
+          <tr><td class="row-label">預估殖利率</td><td class="computed" id="estYld">-</td></tr>
         </tbody>
       </table>
     </div>
@@ -106,6 +110,7 @@ const CODE = new URLSearchParams(location.search).get('code');
 if (!CODE) document.getElementById('loading').textContent = '缺少股票代碼';
 
 let _shares = null; // 百萬股
+let _currentPrice = 0;
 
 function parseNum(id) {
   const v = parseFloat(document.getElementById(id).value.replace(/,/g, ''));
@@ -149,15 +154,24 @@ function calcEst() {
     ? oi * (1 - taxRate / 100) * pw / 100 / _shares : null;
   document.getElementById('estEPScore').textContent = epsCore != null ? epsCore.toFixed(2) : '-';
   document.getElementById('estEPSnonop').textContent = (eps != null && epsCore != null) ? (eps - epsCore).toFixed(2) : '-';
+
+  const divVal = parseNum('estDiv');
+  // 殖利率需要股價，從 info API 取
+  if (divVal != null && _currentPrice > 0) {
+    document.getElementById('estYld').textContent = (divVal / _currentPrice * 100).toFixed(2) + '%';
+  } else {
+    document.getElementById('estYld').textContent = '-';
+  }
 }
 
 async function saveEst() {
   const data = {};
-  ['estRev1','estRev2','estRev3','estGM','estOpex','estNonop','estTax','estPW'].forEach(id => {
+  ['estRev1','estRev2','estRev3','estGM','estOpex','estNonop','estTax','estPW','estDiv'].forEach(id => {
     data[id] = document.getElementById(id).value;
   });
   // 同時儲存計算結果（供總表直接讀取）
   data._gm = parseNum('estGM');
+  data._div = parseNum('estDiv');
   const r1 = parseNum('estRev1'), r2 = parseNum('estRev2'), r3 = parseNum('estRev3');
   const parts = [r1,r2,r3].filter(v=>v!=null);
   const cumM = parts.length > 0 ? parts.reduce((a,b)=>a+b,0) / 1000 : null;
@@ -166,6 +180,8 @@ async function saveEst() {
   data._nonop = parseNum('estNonop');
   const epsText = document.getElementById('estEPS').textContent;
   data._eps = (epsText && epsText !== '-') ? parseFloat(epsText) : null;
+  const niText = document.getElementById('estNI').textContent;
+  data._aftertax = (niText && niText !== '-') ? parseFloat(niText.replace(/,/g, '')) : null;
   try {
     await fetch(`/api/estimates/${CODE}`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) });
     alert('已儲存');
@@ -173,7 +189,7 @@ async function saveEst() {
 }
 
 async function clearEst() {
-  ['estRev1','estRev2','estRev3','estGM','estOpex','estNonop','estTax','estPW'].forEach(id => {
+  ['estRev1','estRev2','estRev3','estGM','estOpex','estNonop','estTax','estPW','estDiv'].forEach(id => {
     document.getElementById(id).value = '';
   });
   try { await fetch(`/api/estimates/${CODE}`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: '{}' }); } catch(e) {}
@@ -207,6 +223,7 @@ async function loadData() {
     const name = qData.name || info.name || CODE;
     document.title = `${CODE} ${name}`;
     document.getElementById('pageTitle').textContent = `${CODE} ${name}`;
+    _currentPrice = info.close || 0;
 
     const quarters = qData.data || [];
 
