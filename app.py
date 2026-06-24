@@ -1077,21 +1077,30 @@ def save_user_estimate(code):
 
 @app.route("/api/user-settings")
 def get_user_settings():
-    """讀取全域設定（從逍遙的 user_settings 表讀取，確保一致）"""
+    """讀取全域設定：優先 shendong_settings，沒有的 key 才 fallback 到逍遙 user_settings"""
+    _ensure_shendong_tables()
     conn = sqlite3.connect(DB_PATH)
     try:
         conn.execute("""CREATE TABLE IF NOT EXISTS user_settings (
             key TEXT PRIMARY KEY, value TEXT, updated_at TEXT)""")
         conn.commit()
     except Exception: pass
-    rows = conn.execute("SELECT key, value, updated_at FROM user_settings").fetchall()
+    # 先讀逍遙的作為底層預設
+    fallback = {}
+    for r in conn.execute("SELECT key, value, updated_at FROM user_settings").fetchall():
+        fallback[r[0]] = (r[1], r[2] or '2000-01-01')
+    # 再讀沈董自己的，覆蓋同名 key
+    sd = {}
+    for r in conn.execute("SELECT key, value, updated_at FROM shendong_settings").fetchall():
+        sd[r[0]] = (r[1], r[2] or '2000-01-01')
     conn.close()
+    # 合併：沈董有就用沈董，沒有才用逍遙
+    merged = {**fallback, **sd}
     result = {}
     max_time = None
-    for r in rows:
-        result[r[0]] = r[1]
-        t = r[2] or '2000-01-01'
-        result[r[0] + '_time'] = t
+    for k, (v, t) in merged.items():
+        result[k] = v
+        result[k + '_time'] = t
         if max_time is None or t > max_time:
             max_time = t
     result['_updated_at'] = max_time
