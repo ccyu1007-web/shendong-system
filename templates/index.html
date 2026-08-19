@@ -467,8 +467,7 @@
           <th class="g-est" data-col="est_pe" onclick="sortBy('est_pe')">預估PE<span class="sort-icon" id="si_est_pe">↕</span></th>
           <th class="g-est" data-col="est_yld" onclick="sortBy('est_yld')">預估殖利率<span class="sort-icon" id="si_est_yld">↕</span></th>
           <th class="g-est" data-col="est_eps" onclick="sortBy('est_eps')">預估EPS<span class="sort-icon" id="si_est_eps">↕</span></th>
-          <th class="g-est" data-col="est_div" onclick="sortBy('est_div')">預估股利<span class="sort-icon" id="si_est_div">↕</span></th>
-          <th class="g-est col-div-r" data-col="est_date" onclick="sortBy('est_date')">預估日期<span class="sort-icon" id="si_est_date">↕</span></th>
+          <th class="g-est col-div-r" data-col="est_div" onclick="sortBy('est_div')">預估股利<span class="sort-icon" id="si_est_div">↕</span></th>
           <!-- 沈董 -->
           <th class="g-shen col-div" data-col="shen_pe" onclick="sortBy('shen_pe')">沈董PE<span class="sort-icon" id="si_shen_pe">↕</span></th>
           <th class="g-shen" data-col="shen_yld" onclick="sortBy('shen_yld')">沈董殖利率<span class="sort-icon" id="si_shen_yld">↕</span></th>
@@ -631,7 +630,7 @@ const CUSTOM_COLS = [
   ]},
   { group: '預估明細', cols: [
     { id: 'est_grade', label: '等級' }, { id: 'est_pe', label: 'PE' }, { id: 'est_yld', label: '殖利率' },
-    { id: 'est_eps', label: 'EPS' }, { id: 'est_div', label: '股利' }, { id: 'est_date', label: '日期' }
+    { id: 'est_eps', label: 'EPS' }, { id: 'est_div', label: '股利' }
   ]},
   { group: '沈董明細', cols: [
     { id: 'shen_pe', label: 'PE' }, { id: 'shen_yld', label: '殖利率' },
@@ -2673,8 +2672,7 @@ function render() {
       <td class="g-est" data-col="est_pe">${r.est_pe != null ? r.est_pe.toFixed(2) : '－'}</td>
       <td class="g-est" data-col="est_yld">${r.est_yld != null ? r.est_yld.toFixed(2) + '%' : '－'}</td>
       <td class="g-est" data-col="est_eps">${r.est_eps != null ? r.est_eps.toFixed(2) : '－'}</td>
-      <td class="g-est" data-col="est_div">${r.est_div != null ? r.est_div.toFixed(2) : '－'}</td>
-      <td class="g-est col-div-r" data-col="est_date">${r.est_date ? r.est_date.replace(/:\d{2}$/, '') : '－'}</td>
+      <td class="g-est col-div-r" data-col="est_div">${r.est_div != null ? r.est_div.toFixed(2) : '－'}</td>
       <!-- 沈董 -->
       <td class="g-shen col-div" data-col="shen_pe">${r.shen_pe != null ? r.shen_pe.toFixed(2) : '－'}</td>
       <td class="g-shen" data-col="shen_yld">${r.shen_yld != null ? r.shen_yld.toFixed(2) + '%' : '－'}</td>

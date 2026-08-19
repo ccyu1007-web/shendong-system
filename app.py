@@ -445,8 +445,6 @@ def get_stocks():
             if _sd_div is not None:
                 row['est_div'] = _sd_div
                 row['est_yld'] = round(_sd_div / close * 100, 2) if _sd_div > 0 and close and close > 0 else None
-            # 預估日期
-            row['est_date'] = _sd_up.get('date') or _sd_up.get('valParamsDate') or None
 
     result_data = {"count": len(rows), "data": rows}
     resp = jsonify(result_data)
