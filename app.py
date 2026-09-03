@@ -504,10 +504,13 @@ def realtime():
                         price = bid.split("_")[0]
                 if price == "-" or not price:
                     price = s.get("y")
+                parsed_price = float(price) if price else None
+                if parsed_price == 0:
+                    parsed_price = None
                 all_results.append({
                     "code": s.get("c"),
                     "name": s.get("n"),
-                    "price": float(price) if price else None,
+                    "price": parsed_price,
                     "open": float(s["o"]) if s.get("o") else None,
                     "high": float(s["h"]) if s.get("h") else None,
                     "low": float(s["l"]) if s.get("l") else None,
